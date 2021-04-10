@@ -1,0 +1,20 @@
+
+apply plugin: 'java'
+
+version = "1.0.0"
+
+jar {
+    manifest {
+        attributes (
+                'Implementation-Title': 'BlackOrchestra',
+                'Implementation-Version': version,
+                "Class-Path": configurations.compile.collect { it.getName() }.join(' '),
+                'Main-Class': 'bo.Main'
+        )
+    }
+    baseName = "BlackOrchestra"
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
+}
+
+defaultTasks "build", "jar"
