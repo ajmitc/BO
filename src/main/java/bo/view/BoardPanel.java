@@ -180,7 +180,7 @@ public class BoardPanel extends JPanel {
         // Draw starting support level and difficulty
         g.drawImage(MilitarySupportLevel.getStartingMilitarySupportImage(model.getGame().getDifficulty().getStartingMilitarySupport()), 747, 818, null);
 
-        for (Location location: model.getGame().getLocations().values()){
+        for (Location location: model.getGame().getBoard().getLocations().values()){
             // Draw item
             if (location.getItem() != null){
                 p = LOCATION_ITEM_POINTS.get(location.getName());
@@ -199,6 +199,21 @@ public class BoardPanel extends JPanel {
 
                  */
                 g.drawImage(NAZI_TOKEN_MAP.get(naziMember), p.x, p.y, null);
+            }
+
+            // Draw players
+            for (int i = 0; i < location.getPlayers().size(); ++i){
+                Player player = location.getPlayers().get(i);
+                List<Point> points = LOCATION_PLAYER_POINTS.get(location.getName());
+                if (i < points.size()){
+                    p = points.get(i);
+                }
+                else {
+                    p = new Point(points.get(0).x, points.get(0).y);
+                    p.x += (i * 15);
+                    p.y += (i * 15);
+                }
+                g.drawImage(PLAYER_TOKEN_MAP.get(player.getName()), p.x, p.y, null);
             }
         }
 

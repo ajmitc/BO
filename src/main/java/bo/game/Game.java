@@ -5,17 +5,15 @@ import bo.game.event.EventCardDeck;
 import bo.game.interrogation.InterrogationDeck;
 import bo.game.item.Item;
 import bo.game.item.ItemType;
-import bo.game.location.Location;
+import bo.game.location.Board;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
 
 import java.util.*;
 
 public class Game {
-    private static final List<LocationName> LOCATIONS_NO_ITEM = Arrays.asList(LocationName.TRAIN_STATION, LocationName.ZURICH, LocationName.STOCKHOLM, LocationName.AUSCHWITZ, LocationName.TREBLINKA, LocationName.PARIS);
-
     private Difficulty difficulty;
-    private Map<LocationName, Location> locations = new HashMap<>();
+    private Board board;
     private List<Player> players = new ArrayList<>();
     private int militarySupport;
     private ConspiratorDeck conspiratorDeck;
@@ -24,13 +22,11 @@ public class Game {
 
     public Game(){
         difficulty = Difficulty.STANDARD;
+        board = new Board();
         militarySupport = difficulty.getStartingMilitarySupport();
         conspiratorDeck = new ConspiratorDeck();
         eventCardDeck = new EventCardDeck();
         interrogationDeck = new InterrogationDeck();
-
-        for (LocationName name: LocationName.values())
-            locations.put(name, new Location(name));
 
         // Create items and distribute to locations
         List<Item> items = new ArrayList<>();
@@ -51,21 +47,17 @@ public class Game {
         for (int i = 0; i < 3; ++i)
             items.add(new Item(ItemType.WEAPONS));
         Collections.shuffle(items);
-        locations.values().stream()
-                .filter(location -> !LOCATIONS_NO_ITEM.contains(location.getName()))
+        board.getLocations().values().stream()
+                .filter(location -> !Board.LOCATIONS_NO_ITEM.contains(location.getName()))
                 .forEach(location -> location.setItem(items.remove(0)));
 
         // Put Nazi leaders at starting locations
-        locations.get(LocationName.DEUTSCHLANDHALLE).getNaziMembers().add(NaziMember.HILTER);
-        locations.get(LocationName.MUNICH).getNaziMembers().add(NaziMember.GOERING);
-        locations.get(LocationName.HANNOVER).getNaziMembers().add(NaziMember.HESS);
-        locations.get(LocationName.NUREMBERG).getNaziMembers().add(NaziMember.BORMANN);
-        locations.get(LocationName.MINISTRY_OF_PROPOGANDA).getNaziMembers().add(NaziMember.GOEBBELS);
-        locations.get(LocationName.GESTAPO_HQ).getNaziMembers().add(NaziMember.HIMMLER);
-
-
-        players.add(new Player(Player.BECK));
-        players.add(new Player(Player.OSTER));
+        board.getLocation(LocationName.DEUTSCHLANDHALLE).getNaziMembers().add(NaziMember.HILTER);
+        board.getLocation(LocationName.MUNICH).getNaziMembers().add(NaziMember.GOERING);
+        board.getLocation(LocationName.HANNOVER).getNaziMembers().add(NaziMember.HESS);
+        board.getLocation(LocationName.NUREMBERG).getNaziMembers().add(NaziMember.BORMANN);
+        board.getLocation(LocationName.MINISTRY_OF_PROPOGANDA).getNaziMembers().add(NaziMember.GOEBBELS);
+        board.getLocation(LocationName.GESTAPO_HQ).getNaziMembers().add(NaziMember.HIMMLER);
     }
 
     public Difficulty getDifficulty() {
@@ -79,14 +71,6 @@ public class Game {
 
     public List<Player> getPlayers() {
         return players;
-    }
-
-    public Map<LocationName, Location> getLocations() {
-        return locations;
-    }
-
-    public Location getLocation(LocationName name){
-        return locations.get(name);
     }
 
     public int getMilitarySupport() {
@@ -111,5 +95,9 @@ public class Game {
 
     public InterrogationDeck getInterrogationDeck() {
         return interrogationDeck;
+    }
+
+    public Board getBoard() {
+        return board;
     }
 }

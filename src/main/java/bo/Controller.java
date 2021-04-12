@@ -1,6 +1,8 @@
 package bo;
 
+import bo.game.Difficulty;
 import bo.game.Game;
+import bo.game.location.LocationName;
 import bo.game.player.Player;
 import bo.view.View;
 
@@ -22,10 +24,14 @@ public class Controller {
                 model.setGame(game);
 
                 // TODO Allow user to set difficulty and player roles
+                game.setDifficulty(Difficulty.STANDARD);
+                game.getPlayers().add(new Player(Player.BECK));
+                game.getPlayers().add(new Player(Player.OSTER));
 
                 // Add the player board panels
                 for (Player player: game.getPlayers()){
                     view.getGamePanel().getPlayerBoardsPanel().addPlayerBoard(player);
+                    game.getBoard().getLocation(LocationName.TRAIN_STATION).getPlayers().add(player);
                 }
 
                 view.showGame();

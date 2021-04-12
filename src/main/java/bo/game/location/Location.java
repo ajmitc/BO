@@ -13,8 +13,16 @@ public class Location {
     private List<NaziMember> naziMembers = new ArrayList<>();
     private List<Player> players = new ArrayList<>();
 
+    // Minimum Stage to access this location
+    private int minStage = 0;
+
     public Location(LocationName name){
         this.name = name;
+    }
+
+    public Location(LocationName name, int stage){
+        this.name = name;
+        this.minStage = stage;
     }
 
     public LocationName getName() {
@@ -35,5 +43,13 @@ public class Location {
 
     public List<Player> getPlayers() {
         return players;
+    }
+
+    public int getMinStage() {
+        return minStage;
+    }
+
+    public void setMinStage(int minStage) {
+        this.minStage = minStage;
     }
 }
