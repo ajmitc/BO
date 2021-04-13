@@ -12,6 +12,8 @@ import bo.game.player.Player;
 import java.util.*;
 
 public class Game {
+    private Phase phase;
+    private PhaseStep phaseStep;
     private Difficulty difficulty;
     private Board board;
     private List<Player> players = new ArrayList<>();
@@ -21,6 +23,9 @@ public class Game {
     private InterrogationDeck interrogationDeck;
 
     public Game(){
+        phase = Phase.SETUP;
+        phaseStep = PhaseStep.START_PHASE;
+
         difficulty = Difficulty.STANDARD;
         board = new Board();
         militarySupport = difficulty.getStartingMilitarySupport();
@@ -58,6 +63,23 @@ public class Game {
         board.getLocation(LocationName.NUREMBERG).getNaziMembers().add(NaziMember.BORMANN);
         board.getLocation(LocationName.MINISTRY_OF_PROPOGANDA).getNaziMembers().add(NaziMember.GOEBBELS);
         board.getLocation(LocationName.GESTAPO_HQ).getNaziMembers().add(NaziMember.HIMMLER);
+    }
+
+    public Phase getPhase() {
+        return phase;
+    }
+
+    public void setPhase(Phase phase) {
+        this.phase = phase;
+        this.phaseStep = PhaseStep.START_PHASE;
+    }
+
+    public PhaseStep getPhaseStep() {
+        return phaseStep;
+    }
+
+    public void setPhaseStep(PhaseStep phaseStep) {
+        this.phaseStep = phaseStep;
     }
 
     public Difficulty getDifficulty() {

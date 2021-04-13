@@ -8,6 +8,7 @@ public enum LocationName {
     ZEUGHAUS,
     MINISTRY_OF_PROPOGANDA,
     SPORTPALAST,
+    JAIL,      // Not a real location, but Players may be here
 
     TRAIN_STATION,
 

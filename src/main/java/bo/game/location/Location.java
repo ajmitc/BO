@@ -14,7 +14,9 @@ public class Location {
     private List<Player> players = new ArrayList<>();
 
     // Minimum Stage to access this location
-    private int minStage = 0;
+    private int minStage = 1;
+    // Maximum stage to access this location.  If game in later stage, cannot go here
+    private int maxStage = 7;
 
     public Location(LocationName name){
         this.name = name;
@@ -51,5 +53,18 @@ public class Location {
 
     public void setMinStage(int minStage) {
         this.minStage = minStage;
+    }
+
+    public int getMaxStage() {
+        return maxStage;
+    }
+
+    public void setMaxStage(int maxStage) {
+        this.maxStage = maxStage;
+    }
+
+    public void setValidStages(int minStage, int maxStage){
+        setMinStage(minStage);
+        setMaxStage(maxStage);
     }
 }

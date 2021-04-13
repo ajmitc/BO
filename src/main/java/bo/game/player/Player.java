@@ -1,5 +1,6 @@
 package bo.game.player;
 
+import bo.game.conspirator.ConspiratorCard;
 import bo.game.item.Item;
 
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ public class Player {
     private List<Item> items = new ArrayList<>();
     private Motivation motivation;
     private Suspicion suspicion;
+    private List<ConspiratorCard> dossier = new ArrayList<>();
 
     public Player(String name){
         this.name = name;
@@ -33,6 +35,22 @@ public class Player {
             type = PlayerType.CIVILIAN;
         else if (name.equals(BECK) || name.equals(OLBRICHT) || name.equals(STAUFFENBERG) || name.equals(TRESCKOW))
             type = PlayerType.WEHRMACHT;
+    }
+
+    public int getDossierMaxSize(int numPlayers){
+        if (motivation == Motivation.TIMID)
+            return 2;
+        if (numPlayers <= 2)
+            return 6;
+        if (numPlayers <= 4)
+            return 5;
+        return 4;
+    }
+
+    public int getMaxItems(int numPlayers){
+        if (numPlayers <= 2)
+            return 4;
+        return 3;
     }
 
     public String getName() {
@@ -61,5 +79,9 @@ public class Player {
 
     public void setSuspicion(Suspicion suspicion) {
         this.suspicion = suspicion;
+    }
+
+    public List<ConspiratorCard> getDossier() {
+        return dossier;
     }
 }
