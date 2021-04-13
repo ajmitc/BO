@@ -1,9 +1,12 @@
 package bo.game.location;
 
+import bo.game.NaziMember;
 import bo.game.item.Item;
 import bo.game.item.ItemType;
+import bo.game.player.Player;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Board {
     public static final List<LocationName> LOCATIONS_NO_ITEM = Arrays.asList(LocationName.TRAIN_STATION, LocationName.ZURICH, LocationName.STOCKHOLM, LocationName.AUSCHWITZ, LocationName.TREBLINKA, LocationName.PARIS);
@@ -52,12 +55,72 @@ public class Board {
         addConnection(LocationName.GESTAPO_HQ, LocationName.JAIL);
     }
 
+    public void move(NaziMember naziMember, LocationName destination){
+        Location dest = getLocation(destination);
+        move(naziMember, dest);
+    }
+
+    public void move(NaziMember naziMember, Location destination){
+        Location location = getLocationWith(naziMember);
+        location.getNaziMembers().remove(naziMember);
+        destination.getNaziMembers().add(naziMember);
+    }
+
+    public void move(Player player, LocationName destination){
+        Location location = getLocationWith(player);
+        location.getPlayers().remove(player);
+        Location dest = getLocation(destination);
+        dest.getPlayers().add(player);
+    }
+
+    /**
+     * Get the locations closest to the given location that have conspirators
+     * @param location
+     * @return
+     */
+    public List<Location> getLocationsWithConspiratorsClosestTo(Location location, boolean includeCurrentLocation){
+        List<Location> returnList = new ArrayList<>();
+
+        if (includeCurrentLocation && !location.getPlayers().isEmpty()){
+            returnList.add(location);
+        }
+        else {
+            List<Location> locationsWithPlayers = locations.values().stream().filter(loc -> !loc.getPlayers().isEmpty()).collect(Collectors.toList());
+            int shortestDistance = 99;
+            for (Location locationWithPlayers: locationsWithPlayers){
+                List<Location> path = AStarAlgorithm.findShortestPath(location, locationWithPlayers, this);
+                if (path.size() < shortestDistance){
+                    returnList.clear();
+                    returnList.add(locationWithPlayers);
+                    shortestDistance = path.size();
+                }
+                else if (path.size() == shortestDistance){
+                    returnList.add(locationWithPlayers);
+                }
+            }
+        }
+
+        return returnList;
+    }
+
     public Map<LocationName, Location> getLocations() {
         return locations;
     }
 
     public Location getLocation(LocationName locationName){
         return locations.get(locationName);
+    }
+
+    public Location getLocationWith(NaziMember naziMember){
+        return locations.values().stream().filter(location -> location.getNaziMembers().contains(naziMember)).findFirst().get();
+    }
+
+    public Location getLocationWith(Player player){
+        return locations.values().stream().filter(location -> location.getPlayers().contains(player)).findFirst().get();
+    }
+
+    public List<Location> getBerlinLocations(){
+        return locations.values().stream().filter(location -> LocationName.inBerlin(location.getName())).collect(Collectors.toList());
     }
 
     public Set<LocationName> getConnections(LocationName locationName){

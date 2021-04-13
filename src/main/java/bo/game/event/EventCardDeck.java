@@ -128,4 +128,12 @@ public class EventCardDeck {
             return stageDecks.get(stage);
         return null;
     }
+
+    public boolean isEmpty(){
+        for (Deck<EventCard> stageDeck: stageDecks.values()){
+            if (!stageDeck.isEmpty())
+                return false;
+        }
+        return true;
+    }
 }

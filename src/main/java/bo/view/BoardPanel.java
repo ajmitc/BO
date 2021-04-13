@@ -47,7 +47,7 @@ public class BoardPanel extends JPanel {
         PLAYER_TOKEN_MAP.put(Player.STAUFFENBERG, ImageUtil.get("token-player-v2-stauffenberg.png", PLAYER_TOKEN_WIDTH));
         PLAYER_TOKEN_MAP.put(Player.TRESCKOW,     ImageUtil.get("token-player-v2-tresckow.png", PLAYER_TOKEN_WIDTH));
 
-        NAZI_TOKEN_MAP.put(NaziMember.HILTER,   ImageUtil.get("token-reich-hitler-v2.png", PLAYER_TOKEN_WIDTH));
+        NAZI_TOKEN_MAP.put(NaziMember.HITLER,   ImageUtil.get("token-reich-hitler-v2.png", PLAYER_TOKEN_WIDTH));
         NAZI_TOKEN_MAP.put(NaziMember.BORMANN,  ImageUtil.get("token-reich-bormann-v2.png", PLAYER_TOKEN_WIDTH));
         NAZI_TOKEN_MAP.put(NaziMember.GOEBBELS, ImageUtil.get("token-reich-goebbels-v2.png", PLAYER_TOKEN_WIDTH));
         NAZI_TOKEN_MAP.put(NaziMember.GOERING,  ImageUtil.get("token-reich-goering-v2.png", PLAYER_TOKEN_WIDTH));

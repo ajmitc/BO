@@ -13,7 +13,9 @@ public class Deck<T> {
     }
 
     public T draw(){
-        return cards.remove(0);
+        if (!cards.isEmpty())
+            return cards.remove(0);
+        return null;
     }
 
     public void add(T card){
@@ -32,5 +34,13 @@ public class Deck<T> {
 
     public void shuffle(){
         Collections.shuffle(cards);
+    }
+
+    public boolean isEmpty(){
+        return cards.isEmpty();
+    }
+
+    public int size(){
+        return cards.size();
     }
 }

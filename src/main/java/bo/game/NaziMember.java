@@ -1,7 +1,7 @@
 package bo.game;
 
 public enum NaziMember {
-    HILTER("Hitler"),
+    HITLER("Hitler"),
     BORMANN("Bormann"),
     GOEBBELS("Goebbels"),
     GOERING("Goering"),

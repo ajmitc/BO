@@ -1,12 +1,13 @@
 package bo;
 
-import bo.game.Difficulty;
-import bo.game.Game;
-import bo.game.Phase;
-import bo.game.PhaseStep;
+import bo.game.*;
+import bo.game.event.EventCard;
+import bo.game.event.EventCardType;
+import bo.game.location.Location;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
 import bo.view.View;
+import bo.view.util.ViewUtil;
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;
@@ -15,9 +16,14 @@ public class Controller {
     private Model model;
     private View view;
 
+    private EventResolver eventResolver;
+
+    private int currentPlayerActionsTaken = 0;
+
     public Controller(Model model, View view){
         this.model = model;
         this.view = view;
+        this.eventResolver = new EventResolver(model, view);
 
         view.getMainMenuPanel().getBtnNewGame().addActionListener(new AbstractAction() {
             @Override
@@ -48,56 +54,45 @@ public class Controller {
         // 3 | Draw an event card.
         while (model.getGame() != null && model.getGame().getPhase() != Phase.GAMEOVER){
             switch (model.getGame().getPhase()){
-                case SETUP -> {
+                case SETUP: {
                     switch (model.getGame().getPhaseStep()){
-                        case START_PHASE -> {
+                        case START_PHASE: {
                             model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                             break;
                         }
-                        case END_PHASE -> {
+                        case END_PHASE: {
                             model.getGame().setPhase(Phase.CHECK_FOR_HITLER_DEPUTIES);
                             break;
                         }
                     }
                     break;
                 }
-                case CHECK_FOR_HITLER_DEPUTIES -> {
+                case CHECK_FOR_HITLER_DEPUTIES: {
                     switch (model.getGame().getPhaseStep()){
-                        case START_PHASE -> {
-                            /*
-                            If you start your turn in the same space as Hitler and/or
-one of his five deputies, their watchful eyes and intimidating
-presence have disrupted your plans and you suffer the
-corresponding penalty(ies):
-HITLER Lower your motivation by 1.
-HESS Discard one card from your dossier.
-GOEBBELS You can't use your special ability this turn.
-BORMANN You can't use the Conspire action this turn.
-HIMMLER Raise your suspicion by 1.
-GOERING Discard one item you are carrying.
-It is possible to suffer multiple penalties on your turn.
-You choose the order that penalties are applied in.
-Penalties are only suffered if Hitler/the deputy is in your
-space at the start of your turn. You do not suffer a penalty
-if you move onto or off of a space with a leader on it.
-                             */
+                        case START_PHASE: {
+                            checkHitlerAndDeputies();
                             model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                             break;
                         }
-                        case END_PHASE -> {
-                            model.getGame().setPhase(Phase.CHECK_FOR_HITLER_DEPUTIES);
+                        case END_PHASE: {
+                            model.getGame().setPhase(Phase.TAKE_ACTIONS);
                             break;
                         }
                     }
                     break;
                 }
-                case TAKE_ACTIONS -> {
+                case TAKE_ACTIONS: {
                     switch (model.getGame().getPhaseStep()){
-                        case START_PHASE -> {
+                        case START_PHASE: {
+                            currentPlayerActionsTaken = 0;
                             model.getGame().setPhaseStep(PhaseStep.TAKE_ACTIONS_CHOOSE_ACTION);
                             break;
                         }
-                        case TAKE_ACTIONS_CHOOSE_ACTION -> {
+                        case TAKE_ACTIONS_CHOOSE_ACTION: {
+                            if (currentPlayerActionsTaken == 3){
+                                model.getGame().setPhaseStep(PhaseStep.END_PHASE);
+                                break;
+                            }
                             /*
                             ACT
 Resolve one effect in your dossier or on your conspirator sheet
@@ -198,21 +193,148 @@ conspirator in your space, observing item and dossier limits.
 When finished taking actions, finish your turn by drawing
 an event card.
                              */
+                            return;
+                        }
+                        case END_PHASE: {
+                            model.getGame().setPhase(Phase.RESOLVE_EVENT);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case RESOLVE_EVENT: {
+                    switch (model.getGame().getPhaseStep()){
+                        case START_PHASE: {
+                            resolveEvent();
                             model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                             break;
                         }
-                        case END_PHASE -> {
+                        case END_PHASE: {
+                            model.getGame().setPhase(Phase.NEXT_PLAYER);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case NEXT_PLAYER: {
+                    switch (model.getGame().getPhaseStep()){
+                        case START_PHASE: {
+                            model.getGame().setNextPlayer();
+                            model.getGame().setPhaseStep(PhaseStep.END_PHASE);
+                            break;
+                        }
+                        case END_PHASE: {
                             model.getGame().setPhase(Phase.CHECK_FOR_HITLER_DEPUTIES);
                             break;
                         }
                     }
                     break;
                 }
-                case RESOLVE_EVENT -> {
-                    switch (model.getGame().getPhaseStep()){
-                        case START_PHASE -> {
-                            /*
-                            Once you've taken all of your actions for the turn, draw the top
+            }
+        }
+    }
+
+
+    /*
+    If you start your turn in the same space as Hitler and/or
+one of his five deputies, their watchful eyes and intimidating
+presence have disrupted your plans and you suffer the
+corresponding penalty(ies):
+HITLER Lower your motivation by 1.
+HESS Discard one card from your dossier.
+GOEBBELS You can't use your special ability this turn.
+BORMANN You can't use the Conspire action this turn.
+HIMMLER Raise your suspicion by 1.
+GOERING Discard one item you are carrying.
+It is possible to suffer multiple penalties on your turn.
+You choose the order that penalties are applied in.
+Penalties are only suffered if Hitler/the deputy is in your
+space at the start of your turn. You do not suffer a penalty
+if you move onto or off of a space with a leader on it.
+     */
+    private void checkHitlerAndDeputies(){
+        for (Location location: model.getGame().getBoard().getLocations().values()){
+            for (Player player: location.getPlayers()){
+                if (player == model.getGame().getCurrentPlayer()){
+                    for (NaziMember naziMember: location.getNaziMembers()) {
+                        switch (naziMember) {
+                            case HITLER:
+                                applyHitlerPenalty(player);
+                                break;
+                            case BORMANN:
+                                applyBormannPenalty(player);
+                                break;
+                            case GOEBBELS:
+                                applyGoebbelsPenalty(player);
+                                break;
+                            case GOERING:
+                                applyGoeringPenalty(player);
+                                break;
+                            case HESS:
+                                applyHessPenalty(player);
+                                break;
+                            case HIMMLER:
+                                applyHimmlerPenalty(player);
+                                break;
+                        }
+                    }
+                    // OK, we've handled the current player...don't need to check the rest
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Lower motivation by 1
+     * @param player
+     */
+    private void applyHitlerPenalty(Player player){
+        player.setMotivation(player.getMotivation().lower());
+    }
+
+    /**
+     * You can't use the Conspire action this turn.
+     * @param player
+     */
+    private void applyBormannPenalty(Player player){
+        // TODO Apply this effect
+    }
+
+    /**
+     * You can't use your special ability this turn.
+     * @param player
+     */
+    private void applyGoebbelsPenalty(Player player){
+        // TODO Apply this effect
+    }
+
+    /**
+     * Discard one item you are carrying.
+     * @param player
+     */
+    private void applyGoeringPenalty(Player player){
+        // TODO Apply this effect
+    }
+
+    /**
+     * Discard one card from your dossier.
+     * @param player
+     */
+    private void applyHessPenalty(Player player){
+        // TODO Apply this effect
+    }
+
+    /**
+     * Raise your suspicion by 1.
+     * @param player
+     */
+    private void applyHimmlerPenalty(Player player){
+        player.setSuspicion(player.getSuspicion().raise());
+    }
+
+    /**
+     Once you've taken all of your actions for the turn, draw the top
 card from the lowest numbered (left-most) event deck available
 and place it face-up on top of the current event space. Resolve
 its effects immediately. This card is the current event, and its
@@ -225,31 +347,71 @@ off-limits for the remainder of the game, as the Reich has lost
 control over these distant lands. When stage 7 begins, move
 Hitler, all deputies, and all conspirators to the nearest legal
 space.
-                             */
-                            model.getGame().setPhaseStep(PhaseStep.END_PHASE);
-                            break;
-                        }
-                        case END_PHASE -> {
-                            model.getGame().setPhase(Phase.CHECK_FOR_HITLER_DEPUTIES);
-                            break;
-                        }
-                    }
-                    break;
-                }
-                case NEXT_PLAYER -> {
-                    switch (model.getGame().getPhaseStep()){
-                        case START_PHASE -> {
-                            model.getGame().setPhaseStep(PhaseStep.END_PHASE);
-                            break;
-                        }
-                        case END_PHASE -> {
-                            model.getGame().setPhase(Phase.CHECK_FOR_HITLER_DEPUTIES);
-                            break;
-                        }
-                    }
-                    break;
-                }
+
+     * - If you can’t draw an event card when required to, you lose the game.
+     * - If the Stage 7 event Documents Located is drawn*, you lose the game.
+     */
+    private void resolveEvent(){
+        if (model.getGame().getEventCardDeck().isEmpty()){
+            ViewUtil.popupNotify("Game Over: Event decks empty!");
+            model.getGame().setPhase(Phase.GAMEOVER);
+            return;
+        }
+
+        // Draw top Event card for current stage
+        Deck<EventCard> deck = model.getGame().getEventCardDeck().getStageDeck(model.getGame().getStage());
+        if (deck.isEmpty()){
+            // Move to next stage
+            model.getGame().setStage(model.getGame().getStage() + 1);
+            deck = model.getGame().getEventCardDeck().getStageDeck(model.getGame().getStage());
+
+            if (model.getGame().getStage() == 7){
+                // TODO When stage 7 begins, move Hitler/deputies/conspirators to nearest legal space (if in location that is not valid)
             }
         }
+        EventCard eventCard = deck.draw();
+
+        // Move any KeyEvent over
+        if (model.getGame().getCurrentEventCard() != null && model.getGame().getCurrentEventCard().getType() == EventCardType.KEY_EVENT){
+            model.getGame().setCurrentKeyEventCard(model.getGame().getCurrentEventCard());
+        }
+
+        // Place it face-up in Event space on board
+        model.getGame().setCurrentEventCard(eventCard);
+        view.refresh();
+
+        // Resolve effects immediately
+        eventResolver.resolveEvent(eventCard);
+    }
+
+    /**
+     * There is only one way to win the game: assassinate Hitler by
+     * succeeding at a plot attempt. To succeed at the attempt,
+     * you must both roll a number of "targets" on the dice equal to or
+     * exceeding the level of Hitler’s Military Support and roll
+     * fewer "eagles" than your suspicion allows.
+     *
+     * However, there are three ways the conspirators lose:
+     * - If all players are in prison, you lose the game.
+     * - If you can’t draw an event card when required to, you lose the game.
+     * - If the Stage 7 event Documents Located is drawn*, you lose the game.
+     */
+    private void checkGameOver(){
+        Location jail = model.getGame().getBoard().getLocation(LocationName.JAIL);
+        boolean allPlayersInJail = true;
+        for (Player player: model.getGame().getPlayers()){
+            if (!jail.getPlayers().contains(player)){
+                allPlayersInJail = false;
+                break;
+            }
+        }
+
+        if (allPlayersInJail){
+            ViewUtil.popupNotify("Game Over: All players in jail!");
+            model.getGame().setPhase(Phase.GAMEOVER);
+            return;
+        }
+
+        // No Event card and Documents Located Event conditions are checked in RESOLVE_EVENT phase
     }
 }

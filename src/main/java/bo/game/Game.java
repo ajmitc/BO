@@ -1,6 +1,7 @@
 package bo.game;
 
 import bo.game.conspirator.ConspiratorDeck;
+import bo.game.event.EventCard;
 import bo.game.event.EventCardDeck;
 import bo.game.interrogation.InterrogationDeck;
 import bo.game.item.Item;
@@ -9,6 +10,7 @@ import bo.game.location.Board;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
 
+import javax.swing.plaf.SplitPaneUI;
 import java.util.*;
 
 public class Game {
@@ -17,10 +19,15 @@ public class Game {
     private Difficulty difficulty;
     private Board board;
     private List<Player> players = new ArrayList<>();
+    private Player currentPlayer;
     private int militarySupport;
     private ConspiratorDeck conspiratorDeck;
     private EventCardDeck eventCardDeck;
     private InterrogationDeck interrogationDeck;
+    private int stage = 1;
+
+    private EventCard currentEventCard;
+    private EventCard currentKeyEventCard;
 
     public Game(){
         phase = Phase.SETUP;
@@ -57,7 +64,7 @@ public class Game {
                 .forEach(location -> location.setItem(items.remove(0)));
 
         // Put Nazi leaders at starting locations
-        board.getLocation(LocationName.DEUTSCHLANDHALLE).getNaziMembers().add(NaziMember.HILTER);
+        board.getLocation(LocationName.DEUTSCHLANDHALLE).getNaziMembers().add(NaziMember.HITLER);
         board.getLocation(LocationName.MUNICH).getNaziMembers().add(NaziMember.GOERING);
         board.getLocation(LocationName.HANNOVER).getNaziMembers().add(NaziMember.HESS);
         board.getLocation(LocationName.NUREMBERG).getNaziMembers().add(NaziMember.BORMANN);
@@ -95,12 +102,32 @@ public class Game {
         return players;
     }
 
+    public Player getCurrentPlayer() {
+        return currentPlayer;
+    }
+
+    public void setCurrentPlayer(Player currentPlayer) {
+        this.currentPlayer = currentPlayer;
+    }
+
+    public void setNextPlayer(){
+        if (currentPlayer != null){
+            int index = players.indexOf(currentPlayer);
+            index = (index + 1) % players.size();
+            currentPlayer = players.get(index);
+        }
+    }
+
     public int getMilitarySupport() {
         return militarySupport;
     }
 
     public void setMilitarySupport(int militarySupport) {
         this.militarySupport = militarySupport;
+    }
+
+    public void resetMilitarySupport(){
+        this.militarySupport = difficulty.getStartingMilitarySupport();
     }
 
     public void adjMilitarySupport(int amount){
@@ -121,5 +148,29 @@ public class Game {
 
     public Board getBoard() {
         return board;
+    }
+
+    public int getStage() {
+        return stage;
+    }
+
+    public void setStage(int stage) {
+        this.stage = stage;
+    }
+
+    public EventCard getCurrentEventCard() {
+        return currentEventCard;
+    }
+
+    public void setCurrentEventCard(EventCard currentEventCard) {
+        this.currentEventCard = currentEventCard;
+    }
+
+    public EventCard getCurrentKeyEventCard() {
+        return currentKeyEventCard;
+    }
+
+    public void setCurrentKeyEventCard(EventCard currentKeyEventCard) {
+        this.currentKeyEventCard = currentKeyEventCard;
     }
 }
