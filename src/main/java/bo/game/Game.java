@@ -9,8 +9,8 @@ import bo.game.item.ItemType;
 import bo.game.location.Board;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
+import bo.game.util.DieResult;
 
-import javax.swing.plaf.SplitPaneUI;
 import java.util.*;
 
 public class Game {
@@ -25,9 +25,12 @@ public class Game {
     private EventCardDeck eventCardDeck;
     private InterrogationDeck interrogationDeck;
     private int stage = 1;
+    private int dissentTrackDice = 0;
 
     private EventCard currentEventCard;
     private EventCard currentKeyEventCard;
+
+    private boolean hessTokenOnBoard = true;
 
     public Game(){
         phase = Phase.SETUP;
@@ -132,6 +135,10 @@ public class Game {
 
     public void adjMilitarySupport(int amount){
         this.militarySupport += amount;
+        if (this.militarySupport < difficulty.getStartingMilitarySupport())
+            this.militarySupport = difficulty.getStartingMilitarySupport();
+        if (this.militarySupport > 7)
+            this.militarySupport = 7;
     }
 
     public ConspiratorDeck getConspiratorDeck() {
@@ -172,5 +179,25 @@ public class Game {
 
     public void setCurrentKeyEventCard(EventCard currentKeyEventCard) {
         this.currentKeyEventCard = currentKeyEventCard;
+    }
+
+    public int getDissentTrackDice() {
+        return dissentTrackDice;
+    }
+
+    public void setDissentTrackDice(int dissentTrackDice) {
+        this.dissentTrackDice = dissentTrackDice;
+    }
+
+    public void adjDissentTrackDice(int amount) {
+        this.dissentTrackDice += amount;
+    }
+
+    public boolean isHessTokenOnBoard() {
+        return hessTokenOnBoard;
+    }
+
+    public void setHessTokenOnBoard(boolean hessTokenOnBoard) {
+        this.hessTokenOnBoard = hessTokenOnBoard;
     }
 }

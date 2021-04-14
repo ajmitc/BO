@@ -24,6 +24,8 @@ public class Player {
     private Suspicion suspicion;
     private List<ConspiratorCard> dossier = new ArrayList<>();
 
+    private boolean arrested = false;
+
     public Player(String name){
         this.name = name;
         this.motivation = Motivation.TIMID;
@@ -83,5 +85,13 @@ public class Player {
 
     public List<ConspiratorCard> getDossier() {
         return dossier;
+    }
+
+    public boolean isArrested() {
+        return arrested;
+    }
+
+    public void setArrested(boolean arrested) {
+        this.arrested = arrested;
     }
 }

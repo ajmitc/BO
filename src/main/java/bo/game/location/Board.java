@@ -62,6 +62,8 @@ public class Board {
 
     public void move(NaziMember naziMember, Location destination){
         Location location = getLocationWith(naziMember);
+        if (location == null)
+            return;
         location.getNaziMembers().remove(naziMember);
         destination.getNaziMembers().add(naziMember);
     }
@@ -112,7 +114,10 @@ public class Board {
     }
 
     public Location getLocationWith(NaziMember naziMember){
-        return locations.values().stream().filter(location -> location.getNaziMembers().contains(naziMember)).findFirst().get();
+        Optional<Location> loc = locations.values().stream().filter(location -> location.getNaziMembers().contains(naziMember)).findFirst();
+        if (loc.isPresent())
+            return loc.get();
+        return null;
     }
 
     public Location getLocationWith(Player player){
