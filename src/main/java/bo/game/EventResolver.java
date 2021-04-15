@@ -151,66 +151,97 @@ public class EventResolver {
                 handlePearlHarborAttack();
                 break;
             case FALL_OF_KIEV:
+                handleFallOfKiev();
                 break;
             case OPERATION_BARBAROSSA:
+                handleOperationBarbarossa();
                 break;
             case HITLER_ASSUMES_COMMAND:
+                handleHitlerAssumesCommand();
                 break;
             case VISIT_FROM_BORMANN_5:
+                handleVisitFromBormannStage5();
                 break;
             case VISIT_FROM_GOERING_5:
+                handleVisitFromGoeringStage5();
                 break;
             case CASABLANCA_CONFERENCE:
+                handleCasablancaConference();
                 break;
             case HEYDRICH_ASSASSINATED:
+                handleHeydrichAssassinated();
                 break;
             case BERGHOF_RETREAT_5:
+                handleBerghofRetreatStage5();
                 break;
             case ROMMEL_DEFEATED:
+                handleRommelDefeated();
                 break;
             case RUSSIAN_SETBACK:
+                handleRussianSetback();
                 break;
             case VISIT_FRONT:
+                handleVisitToTheFront();
                 break;
             case EASTERN_PUSH:
+                handleEasternPush();
                 break;
             case LEBENSRAUM:
+                handleLebensraum();
                 break;
             case VISIT_FROM_HITLER_6:
+                handleVisitFromHitlerStage6();
                 break;
             case SLOW_RETREAT:
+                handleSlowRetreat();
                 break;
             case BERLIN_BOMBED:
+                handleBerlinBombed();
                 break;
             case WARSAW_GHETTO_UPRISING:
+                handleWarsawGhettoUprising();
                 break;
             case STALINGRAD_SURROUNDED:
+                handleStalingradSurrounded();
                 break;
             case WOLFPACKS:
+                handleWolfpacks();
                 break;
             case SICILY_INVADED:
+                handleSicilyInvaded();
                 break;
             case FORTRESS_EUROPA:
+                handleFortressEuropa();
                 break;
             case KURSK_RECAPTURED:
+                handleKurskRecaptured();
                 break;
             case V2_ROCKET:
+                handleV2Rocket();
                 break;
             case FUHRER_BUNKER:
+                handleFuhrerBunker();
                 break;
             case OPERATION_OVERLORD:
+                handleOperationOverlord();
                 break;
             case GOTHIC_LINE:
+                handleGothicLine();
                 break;
             case ROMMEL_EXECUTED:
+                handleRommelExecuted();
                 break;
             case DOCUMENTS_LOCATED:
+                handleDocumentsLocated();
                 break;
             case FALL_OF_ROME:
+                handleFallOfRome();
                 break;
             case FINAL_CONSCRIPTION:
+                handleFinalConscription();
                 break;
             case ANZIO_LANDING:
+                handleAnzioLanding();
                 break;
         }
     }
@@ -573,9 +604,11 @@ public class EventResolver {
 
     private void handleHessLeavesGermany(){
         model.getGame().adjMilitarySupport(-2);
-        Location hessLocation = model.getGame().getBoard().getLocationWith(NaziMember.HESS);
-        hessLocation.getNaziMembers().remove(NaziMember.HESS);
-        model.getGame().setHessTokenOnBoard(false);
+        if (model.getGame().isHessTokenOnBoard()) {
+            Location hessLocation = model.getGame().getBoard().getLocationWith(NaziMember.HESS);
+            hessLocation.getNaziMembers().remove(NaziMember.HESS);
+            model.getGame().setHessTokenOnBoard(false);
+        }
         // TODO While this is the current event, ignore one eagle on plot attempts
     }
 
@@ -588,6 +621,248 @@ public class EventResolver {
                     player.setMotivation(player.getMotivation().lower());
                 });
     }
+
+    private void handleAfrikaKorps(){
+        model.getGame().adjMilitarySupport(1);
+        model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.PRAGUE);
+        model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.PRAGUE);
+    }
+
+    private void handleYugoslaviaSurrenders(){
+        model.getGame().adjMilitarySupport(1);
+        model.getGame().getBoard().move(NaziMember.HIMMLER, LocationName.PARIS);
+    }
+
+    private void handlePearlHarborAttack(){
+        model.getGame().adjMilitarySupport(-1);
+        // Remove next 3 Stage 4 cards
+        model.getGame().getEventCardDeck().getStageDeck(4).draw();
+        model.getGame().getEventCardDeck().getStageDeck(4).draw();
+        model.getGame().getEventCardDeck().getStageDeck(4).draw();
+
+        if (model.getGame().isHessTokenOnBoard()) {
+            Location hessLocation = model.getGame().getBoard().getLocationWith(NaziMember.HESS);
+            hessLocation.getNaziMembers().remove(NaziMember.HESS);
+            model.getGame().setHessTokenOnBoard(false);
+        }
+    }
+
+    private void handleFallOfKiev(){
+        model.getGame().adjMilitarySupport(2);
+    }
+
+    private void handleOperationBarbarossa(){
+        model.getGame().adjMilitarySupport(1);
+        model.getGame().getBoard().move(NaziMember.GOERING, LocationName.POSEN);
+    }
+
+    private void handleHitlerAssumesCommand(){
+        model.getGame().adjMilitarySupport(-1);
+        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.WOLFSSCHANZE);
+        if (model.getGame().getBoard().getLocation(LocationName.WOLFSSCHANZE).getItem() != null)
+            model.getGame().getBoard().getLocation(LocationName.WOLFSSCHANZE).getItem().setRevealed(true);
+    }
+
+    private void handleCasablancaConference(){
+        model.getGame().getPlayers().stream().forEach(player -> {
+            player.setMotivation(player.getMotivation().lower());
+            // TODO Player must discard a card
+        });
+    }
+
+    private void handleHeydrichAssassinated(){
+        Arrays.stream(NaziMember.values()).forEach(naziMember -> {
+            model.getGame().getBoard().move(naziMember, LocationName.CHANCELLERY);
+        });
+        // Any conspirators at HIGH or EXTREME motivation in Prague are arrested
+        model.getGame().getPlayers().stream()
+                .filter(player -> player.getSuspicion() == Suspicion.HIGH || player.getSuspicion() == Suspicion.EXTREME)
+                .filter(player -> model.getGame().getBoard().getLocationWith(player).getName() == LocationName.PRAGUE)
+                .forEach(player -> {
+                    player.setArrested(true);
+                    model.getGame().getBoard().move(player, LocationName.JAIL);
+                    ViewUtil.popupNotify(player.getName() + " has been arrested!");
+                });
+    }
+
+    private void handleVisitFromBormannStage5(){
+        Location destination = moveNaziMemberToClosestConspirator(NaziMember.BORMANN);
+
+        if (destination.getPlayers().size() == 1){
+            destination.getPlayers().get(0).setArrested(true);
+            model.getGame().getBoard().move(destination.getPlayers().get(0), LocationName.JAIL);
+            ViewUtil.popupNotify(destination.getPlayers().get(0).getName() + " has been arrested!");
+        }
+    }
+
+    private void handleVisitFromGoeringStage5(){
+        moveNaziMemberToClosestConspirator(NaziMember.GOERING);
+        model.getGame().getPlayers().stream()
+                .filter(player -> player.getType() == PlayerType.ABWEHR)
+                .forEach(player -> {
+                    player.setMotivation(player.getMotivation().lower());
+                });
+    }
+
+    private void handleBerghofRetreatStage5(){
+        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.BERGHOF);
+        model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.BERGHOF);
+        model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.BERGHOF);
+
+        // TODO While this is the current event, ignore 1 eagle on all plot attempts
+    }
+
+    private void handleRommelDefeated(){
+        model.getGame().adjMilitarySupport(-1);
+        model.getGame().getEventCardDeck().getStageDeck(5).draw();
+        model.getGame().getEventCardDeck().getStageDeck(5).draw();
+    }
+
+    private void handleRussianSetback(){
+        model.getGame().adjMilitarySupport(-1);
+        model.getGame().getEventCardDeck().getStageDeck(5).draw();
+        model.getGame().getEventCardDeck().getStageDeck(5).draw();
+
+        // TODO While this is the current event, add 1 eagle to all plot attempts
+    }
+
+    private void handleVisitToTheFront(){
+        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.SMOLENSK);
+        model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.SMOLENSK);
+
+        if (model.getGame().getBoard().getLocation(LocationName.SMOLENSK).getItem() != null)
+            model.getGame().getBoard().getLocation(LocationName.SMOLENSK).getItem().setRevealed(true);
+
+        // TODO While this is the current event, ignore 2 eagles on all plot attempts
+    }
+
+    private void handleEasternPush(){
+        model.getGame().adjMilitarySupport(1);
+        model.getGame().getPlayers().stream().filter(player -> player.getType() == PlayerType.WEHRMACHT).forEach(player -> {
+            model.getGame().getBoard().move(player, LocationName.BORISOV);
+        });
+    }
+
+    private void handleLebensraum(){
+        model.getGame().getPlayers().stream().forEach(player -> {
+            player.setMotivation(player.getMotivation().raise());
+        });
+        model.getGame().getBoard().move(NaziMember.HIMMLER, LocationName.WASSERBURG);
+        if (model.getGame().getBoard().getLocation(LocationName.WASSERBURG).getItem() != null)
+            model.getGame().getBoard().getLocation(LocationName.WASSERBURG).getItem().setRevealed(true);
+    }
+
+    private void handleVisitFromHitlerStage6(){
+        moveNaziMemberToClosestConspirator(NaziMember.HITLER);
+        // TODO While this is the current event, ignore 2 eagles on all plot attempts
+    }
+
+    private void handleSlowRetreat(){
+        model.getGame().getBoard().getLocations().values().stream()
+                .filter(location -> location.getMaxStage() == 6)
+                .forEach(location -> {
+                    location.getPlayers().stream().forEach(player -> {
+                        // TODO Move to nearest legal space
+                    });
+                    location.getNaziMembers().stream().forEach(naziMember -> {
+                        // TODO Move to nearest legal space
+                    });
+                });
+    }
+
+    private void handleBerlinBombed(){
+        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+
+        // TODO While this is the current event, add 1 eagle to all plot attempts
+    }
+
+    private void handleWarsawGhettoUprising(){
+        // TODO While this is the current event, when the dissent track is filled, all conspirators may increase
+        // TODO their motivation by 1 instead of choosing from the normal benefits
+    }
+
+    private void handleStalingradSurrounded(){
+        model.getGame().resetMilitarySupport();
+    }
+
+    private void handleWolfpacks(){
+        model.getGame().adjMilitarySupport(1);
+        model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.WOLFSSCHLUCHT);
+        model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.WOLFSSCHLUCHT);
+    }
+
+    private void handleSicilyInvaded(){
+        model.getGame().adjMilitarySupport(-1);
+        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+        model.getGame().getPlayers().stream().filter(player -> player.getType() == PlayerType.ABWEHR).forEach(player -> {
+            model.getGame().getBoard().move(player, LocationName.CHANCELLERY);
+        });
+    }
+
+    private void handleFortressEuropa(){
+        if (model.getGame().getMilitarySupport() < 5)
+            model.getGame().setMilitarySupport(5);
+        model.getGame().getEventCardDeck().getStageDeck(6).draw();
+        model.getGame().getEventCardDeck().getStageDeck(6).draw();
+        // TODO While this is the current event, ignore 1 eagle on all plot attempts
+    }
+
+    private void handleKurskRecaptured(){
+        model.getGame().adjMilitarySupport(-1);
+        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.ANLAGE_SUD);
+        model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.POSEN);
+    }
+
+    private void handleV2Rocket(){
+        model.getGame().adjMilitarySupport(1);
+        model.getGame().getPlayers().stream().forEach(player -> {
+            player.setMotivation(player.getMotivation().raise());
+        });
+        model.getGame().getBoard().move(NaziMember.GOERING, LocationName.HANNOVER);
+        model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.BERGHOF);
+    }
+
+    private void handleFuhrerBunker(){
+        model.getGame().getPlayers().stream().forEach(player -> {
+            player.setSuspicion(player.getSuspicion().raise());
+        });
+        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+    }
+
+    private void handleOperationOverlord(){
+        model.getGame().resetMilitarySupport();
+        model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.MINISTRY_OF_PROPOGANDA);
+    }
+
+    private void handleGothicLine(){
+        model.getGame().adjMilitarySupport(1);
+    }
+
+    private void handleRommelExecuted(){
+        model.getGame().adjMilitarySupport(-1);
+        model.getGame().getBoard().move(NaziMember.HIMMLER, LocationName.CHANCELLERY);
+    }
+
+    private void handleDocumentsLocated(){
+        model.getGame().setPhase(Phase.GAMEOVER);
+    }
+
+    private void handleFallOfRome(){
+        model.getGame().adjMilitarySupport(-1);
+    }
+
+    private void handleFinalConscription(){
+        // TODO All conspirators may draw up to 2 cards
+    }
+
+    private void handleAnzioLanding(){
+        // TODO Abwehr cannot use their special abilities for the rest of the game
+    }
+
+
+
+
+
 
 
 
@@ -605,19 +880,5 @@ public class EventResolver {
         }
         model.getGame().getBoard().move(naziMember, destination);
         return destination;
-    }
-
-    private void handleAfrikaKorps(){
-        model.getGame().adjMilitarySupport(1);
-        model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.PRAGUE);
-        model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.PRAGUE);
-    }
-
-    private void handleYugoslaviaSurrenders(){
-
-    }
-
-    private void handlePearlHarborAttack(){
-
     }
 }
