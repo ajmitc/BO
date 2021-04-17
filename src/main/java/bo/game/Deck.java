@@ -7,12 +7,16 @@ import java.util.List;
 public class Deck<T> {
     private List<T> cards = new ArrayList<>();
     private List<T> discardPile = new ArrayList<>();
+    private boolean shuffleDiscardIfDeckEmpty = true;
 
     public Deck(){
 
     }
 
     public T draw(){
+        if (cards.isEmpty() && shuffleDiscardIfDeckEmpty){
+            shuffleDiscardIntoDeck();
+        }
         if (!cards.isEmpty())
             return cards.remove(0);
         return null;
@@ -42,5 +46,13 @@ public class Deck<T> {
 
     public int size(){
         return cards.size();
+    }
+
+    public void setShuffleDiscardIfDeckEmpty(boolean shuffleDiscardIfDeckEmpty) {
+        this.shuffleDiscardIfDeckEmpty = shuffleDiscardIfDeckEmpty;
+    }
+
+    public boolean isShuffleDiscardIfDeckEmpty() {
+        return shuffleDiscardIfDeckEmpty;
     }
 }

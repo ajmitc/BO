@@ -1,16 +1,29 @@
 package bo;
 
 import bo.game.*;
+import bo.game.conspirator.ConspiratorCard;
 import bo.game.event.EventCard;
 import bo.game.event.EventCardType;
+import bo.game.item.Item;
+import bo.game.item.ItemType;
 import bo.game.location.Location;
+import bo.game.location.LocationModifier;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
+import bo.game.player.PlayerType;
+import bo.game.util.DieResult;
+import bo.game.util.DissentReward;
+import bo.game.util.Util;
 import bo.view.View;
 import bo.view.util.ViewUtil;
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
 
 public class Controller {
     private Model model;
@@ -18,7 +31,12 @@ public class Controller {
 
     private EventResolver eventResolver;
 
+    private int currentPlayerActionsAllowed = 3;
     private int currentPlayerActionsTaken = 0;
+    private boolean currentPlayerConspireActionTaken = false;
+
+    private boolean conspireActionDisabled = false;
+    private boolean specialAbilityActionDisabled = false;
 
     public Controller(Model model, View view){
         this.model = model;
@@ -42,8 +60,297 @@ public class Controller {
                     game.getBoard().getLocation(LocationName.TRAIN_STATION).getPlayers().add(player);
                 }
 
+                game.setNextPlayer();
+
                 view.showGame();
                 view.refresh();
+            }
+        });
+
+        /*
+CONSPIRE
+You can only take the Conspire action once during your turn.
+Take up to 3 dice, spending one action for each die taken.
+Roll all of those dice and resolve the results in this order:
+- For each eagle rolled , you and all other conspirators in your space raise suspicion by 1.
+- For each target rolled, place that die on the Dissent Track.
+- Total all the number results and gain that many actions this turn, plus any unspent actions (if any) that you didn't use for the Conspire action.
+         */
+        view.getGamePanel().getActionPanel().getBtnConspire().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                if (conspireActionDisabled){
+                    ViewUtil.popupNotify("This action is disabled due to Deputy Penalty");
+                    return;
+                }
+                if (currentPlayerConspireActionTaken){
+                    ViewUtil.popupNotify("You can only take this action once per turn");
+                    return;
+                }
+                int maxAllowedDice = 3 - currentPlayerActionsTaken;
+                int numDice = 1;
+                if (maxAllowedDice > 1){
+                    Integer[] options = new Integer[maxAllowedDice];
+                    for (int i = 0; i < maxAllowedDice; ++i){
+                        options[i] = new Integer(i + 1);
+                    }
+                    numDice = (Integer) ViewUtil.popupDropdown("Conspire Action", "How many dice do you want to roll?", options);
+                }
+                List<DieResult> dieResults = new ArrayList<>();
+                for (int i = 0; i < numDice; ++i){
+                    dieResults.add(Util.roll());
+                }
+
+                // TODO Show dice results
+
+                dieResults.sort(new Comparator<DieResult>() {
+                    @Override
+                    public int compare(DieResult dieResult, DieResult t1) {
+                        if (dieResult == DieResult.EAGLE)
+                            return -1;
+                        if (t1 == DieResult.EAGLE)
+                            return 1;
+                        if (dieResult == DieResult.TARGET)
+                            return -1;
+                        if (t1 == DieResult.TARGET)
+                            return 1;
+                        return 0;
+                    }
+                });
+                for (DieResult dieResult: dieResults){
+                    switch (dieResult){
+                        case EAGLE:{
+                            // All conspirators in current player's location gain one suspicion
+                            model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer()).getPlayers().stream().forEach(player -> {
+                                player.setSuspicion(player.getSuspicion().raise());
+                            });
+                            break;
+                        }
+                        case TARGET:{
+                            // Place on dissent track, gain bonus if full
+                            model.getGame().adjDissentTrackDice(1);
+                            if (model.getGame().getDissentTrackDice() >= 3){
+                                handleFullDissentTrack();
+                            }
+                            break;
+                        }
+                        default:{
+                            currentPlayerActionsAllowed += dieResult.getValue();
+                        }
+                    }
+                }
+                currentPlayerConspireActionTaken = true;
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+MOVE
+Move from your current space to a connected space.
+
+Legal spaces: Each space on the board has a number on it corresponding to an event stage. You may only move into
+spaces with a number equal to or less than the current stage’s number. For example, you can’t enter the PRAGUE space
+until Stage 3 or later.
+Berlin: Spaces in Berlin are designated by a B instead of a stage number and are always accessible. All Berlin spaces are treated
+as being connected to one another. In order to enter or leave Berlin, you must move through the TRAIN STATION.
+If an effect simply lists “Berlin” (e.g. “choose one conspirator in Berlin”), this includes all Berlin spaces. However, it is not
+considered to be the same space for transfers, plot elements, etc. – conspirators must still be in the same space to fulfill
+those conditions.
+
+8
+Certain spaces on the board contain modifiers (e.g., Paris: -2 suspicion , +1 Military Support). When you enter a space with
+modifiers, you immediately apply the listed modifiers and continue your turn. Applying the effects does not count as an
+action. You may gain the effects of a space multiple times in a
+turn, but you must move out of the space and then move back
+into it to gain the effect again.
+Fortified Locations: Certain locations have especially
+high security and defense for the Führer. These are
+known as fortified locations and serve as required
+elements for some plots. Otherwise, they have no
+game effect and may be moved into or out of freely.
+         */
+        view.getGamePanel().getActionPanel().getBtnMove().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+        ACT
+        Resolve one effect in your dossier or on your conspirator sheet preceded by the ~ symbol.
+        Lightning EFFECTS - An effect preceded by the lightning symbol does not require an action to resolve. Lightning effects can be resolved at any
+        time, even on another player’s turn.
+         */
+        view.getGamePanel().getActionPanel().getBtnPlayCard().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                // TODO Choose card to play (maybe a dropdown for now, then let player click on card image)
+                // TODO Maybe open separate dialog with card choices
+                // TODO Discard played card when finished
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        view.getGamePanel().getActionPanel().getBtnPlayLightningCard().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                // TODO Choose card to play - get all lightning cards from all players
+                // TODO Maybe open separate dialog with card choices
+                // TODO Discard played card when finished
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+DOSSIER
+Take the top card of the conspirator deck and add it to your dossier face-up, observing dossier limits. See Motivation and Suspicion on page 4.
+
+%ILLEGAL
+Conspirator cards with this symbol are illegal.
+Possessing these powerful but risky cards could
+draw the unwelcome attention of the Gestapo.
+(See Gestapo Raids on page 9).
+
+Some conspirator cards are plots, which are necessary to make an assassination attempt. (See Plots on page 10).
+
+Many conspirator cards are discarded after resolving their effect. Place discarded cards into a face-up discard pile next to
+the conspirator deck. If the conspirator deck runs out of cards, shuffle the discarded conspirator cards into a new, face-down
+conspirator deck.
+         */
+        view.getGamePanel().getActionPanel().getBtnDrawCard().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                int maxCards = model.getGame().getCurrentPlayer().getDossierMaxSize(model.getGame().getPlayers().size());
+                if (model.getGame().getCurrentPlayer().getDossier().size() == maxCards){
+                    ViewUtil.popupNotify("You cannot take any more cards (hand size limit reached)");
+                    return;
+                }
+                ConspiratorCard card = model.getGame().getConspiratorDeck().draw();
+                model.getGame().getCurrentPlayer().getDossier().add(card);
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+TRANSFER
+Give or take one item or card in your dossier to/from a
+conspirator in your space, observing item and dossier limits.
+(See Item and Dossier Limits on page 5).
+When finished taking actions, finish your turn by drawing
+an event card.
+         */
+        view.getGamePanel().getActionPanel().getBtnTransferCardTile().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+REVEAL ITEM
+Flip a face-down item tile in your space face-up.
+         */
+        view.getGamePanel().getActionPanel().getBtnRevealItem().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+COLLECT ITEM
+Take a revealed item tile in your space and add it to your conspirator sheet.
+         */
+        view.getGamePanel().getActionPanel().getBtnCollectItem().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                Location location = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
+                if (location.getItem() == null){
+                    ViewUtil.popupNotify("No item to collect");
+                    return;
+                }
+                if (!location.getItem().isRevealed()){
+                    ViewUtil.popupNotify("Item must be revealed before collecting");
+                    return;
+                }
+                int maxItems = model.getGame().getCurrentPlayer().getMaxItems(model.getGame().getPlayers().size());
+                if (model.getGame().getCurrentPlayer().getItems().size() == maxItems){
+                    ViewUtil.popupNotify("You can only hold " + maxItems + " items");
+                    return;
+                }
+                Item item = location.getItem();
+                location.setItem(null);
+                model.getGame().getCurrentPlayer().getItems().add(item);
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+DELIVER ITEM
+From time to time, you’ll need to continue to carry out your day-to-day duties in order to lower suspicion. Spaces are
+marked with a "Deliver" text that may have items delivered there in exchange for lowering suspicion.
+Once that space’s original item has been removed and the delivery text is revealed, you may deliver to that city by
+discarding the appropriate item(s) and lowering your suspicion by the amount shown. Delivered items are discarded to the
+item discard pile and are not put back on the delivery space.
+If the benefit is listed as distributed, the active player distributes the benefit among the conspirators however
+they choose, regardless of location. However, if a player is in PRISON, they cannot receive any benefits from a delivery.
+         */
+        view.getGamePanel().getActionPanel().getBtnDeliverItem().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                handleItemDelivery();
+                run();
+            }
+        });
+
+        /*
+RELEASE
+$ | If you are at extreme suspicion, you cannot take this action.
+You can attempt to use your standing and influence to order a
+conspirator to be released from prison. (See Arrest and Prison
+on page 9). You must be in the GESTAPO HQ space in order
+to take this action.
+Roll one die. If you rolled # , you’ve asked too many suspicious
+questions and instead of freeing your ally, you are arrested. If
+you rolled any other result, raise your suspicion by 1 and choose
+one arrested conspirator to release. The released conspirator
+moves to GESTAPO HQ at high suspicion.
+         */
+        view.getGamePanel().getActionPanel().getBtnRelease().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+
+                currentPlayerActionsTaken += 1;
+                run();
+            }
+        });
+
+        /*
+        ACT
+        Resolve one effect on your conspirator sheet preceded by the arrow symbol.
+         */
+        view.getGamePanel().getActionPanel().getBtnPlayerSpecialAbility().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                if (specialAbilityActionDisabled){
+                    ViewUtil.popupNotify("This action is disabled due to Deputy penalty");
+                    return;
+                }
+
+                currentPlayerActionsTaken += 1;
+                run();
             }
         });
     }
@@ -84,115 +391,18 @@ public class Controller {
                 case TAKE_ACTIONS: {
                     switch (model.getGame().getPhaseStep()){
                         case START_PHASE: {
+                            currentPlayerActionsAllowed = 3;
                             currentPlayerActionsTaken = 0;
+                            currentPlayerConspireActionTaken = false;
                             model.getGame().setPhaseStep(PhaseStep.TAKE_ACTIONS_CHOOSE_ACTION);
+                            ViewUtil.popupNotify(model.getGame().getCurrentPlayer().getName() + "'s turn to take actions");
                             break;
                         }
                         case TAKE_ACTIONS_CHOOSE_ACTION: {
-                            if (currentPlayerActionsTaken == 3){
+                            if (currentPlayerActionsTaken == currentPlayerActionsAllowed){
                                 model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                                 break;
                             }
-                            /*
-                            ACT
-Resolve one effect in your dossier or on your conspirator sheet
-preceded by the ~ symbol.
-] EFFECTS | An effect preceded by the ] symbol does not
-require an action to resolve. ] effects can be resolved at any
-time, even on another player’s turn.
-COLLECT ITEM
-Take a revealed item tile in your space and add it to your
-conspirator sheet.
-CONSPIRE
-You can only take the Conspire action once during your turn.
-Take up to 3 dice, spending one action for each die taken.
-Roll all of those dice and resolve the results in this order:
-■■ For each # rolled , you and all other conspirators in
-your space raise suspicion by 1.
-■■ For each @ rolled, place that die on the Dissent Track.
-■■ Total all the number results and gain that many
-actions this turn, plus any unspent actions (if any)
-that you didn't use for the Conspire action.
-
-DELIVER ITEM
-From time to time, you’ll need to continue to carry out your
-day-to-day duties in order to lower suspicion. Spaces are
-marked with a "Deliver" text that may have items delivered
-there in exchange for lowering suspicion.
-Once that space’s original item has been removed and the
-delivery text is revealed, you may deliver to that city by
-discarding the appropriate item(s) and lowering your suspicion
-by the amount shown. Delivered items are discarded to the
-item discard pile and are not put back on the delivery space.
-If the benefit is listed as distributed, the active player
-distributes the benefit among the conspirators however
-they choose, regardless of location. However, if a player is in
-PRISON, they cannot receive any benefits from a delivery.
-DOSSIER
-Take the top card of the conspirator deck and add it to your
-dossier face-up, observing dossier limits. See Motivation and
-Suspicion on page 4.
-%ILLEGAL
-Conspirator cards with this symbol are illegal.
-Possessing these powerful but risky cards could
-draw the unwelcome attention of the Gestapo.
-(See Gestapo Raids on page 9).
-Some conspirator cards are plots, which are necessary to make
-an assassination attempt. (See Plots on page 10).
-Many conspirator cards are discarded after resolving their
-effect. Place discarded cards into a face-up discard pile next to
-the conspirator deck. If the conspirator deck runs out of cards,
-shuffle the discarded conspirator cards into a new, face-down
-conspirator deck.
-MOVE
-Move from your current space to a connected space.
-Legal spaces: Each space on the board has a number on it
-corresponding to an event stage. You may only move into
-spaces with a number equal to or less than the current stage’s
-number. For example, you can’t enter the PRAGUE space
-until Stage 3 or later.
-Berlin: Spaces in Berlin are designated by a B instead of a stage
-number and are always accessible. All Berlin spaces are treated
-as being connected to one another. In order to enter or leave
-Berlin, you must move through the TRAIN STATION.
-If an effect simply lists “Berlin” (e.g. “choose one conspirator
-in Berlin”), this includes all Berlin spaces. However, it is not
-considered to be the same space for transfers, plot elements,
-etc. – conspirators must still be in the same space to fulfill
-those conditions.
-8
-Certain spaces on the board contain modifiers (e.g., Paris:
--2 suspicion , +1 Military Support). When you enter a space with
-modifiers, you immediately apply the listed modifiers and
-continue your turn. Applying the effects does not count as an
-action. You may gain the effects of a space multiple times in a
-turn, but you must move out of the space and then move back
-into it to gain the effect again.
-Fortified Locations: Certain locations have especially
-high security and defense for the Führer. These are
-known as fortified locations and serve as required
-elements for some plots. Otherwise, they have no
-game effect and may be moved into or out of freely.
-RELEASE
-$ | If you are at extreme suspicion, you cannot take this action.
-You can attempt to use your standing and influence to order a
-conspirator to be released from prison. (See Arrest and Prison
-on page 9). You must be in the GESTAPO HQ space in order
-to take this action.
-Roll one die. If you rolled # , you’ve asked too many suspicious
-questions and instead of freeing your ally, you are arrested. If
-you rolled any other result, raise your suspicion by 1 and choose
-one arrested conspirator to release. The released conspirator
-moves to GESTAPO HQ at high suspicion.
-REVEAL ITEM
-Flip a face-down item tile in your space face-up.
-TRANSFER
-Give or take one item or card in your dossier to/from a
-conspirator in your space, observing item and dossier limits.
-(See Item and Dossier Limits on page 5).
-When finished taking actions, finish your turn by drawing
-an event card.
-                             */
                             return;
                         }
                         case END_PHASE: {
@@ -219,6 +429,8 @@ an event card.
                 case NEXT_PLAYER: {
                     switch (model.getGame().getPhaseStep()){
                         case START_PHASE: {
+                            conspireActionDisabled = false;
+                            specialAbilityActionDisabled = false;
                             model.getGame().setNextPlayer();
                             model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                             break;
@@ -298,7 +510,7 @@ if you move onto or off of a space with a leader on it.
      * @param player
      */
     private void applyBormannPenalty(Player player){
-        // TODO Apply this effect
+        conspireActionDisabled = true;
     }
 
     /**
@@ -306,7 +518,7 @@ if you move onto or off of a space with a leader on it.
      * @param player
      */
     private void applyGoebbelsPenalty(Player player){
-        // TODO Apply this effect
+        specialAbilityActionDisabled = true;
     }
 
     /**
@@ -314,7 +526,16 @@ if you move onto or off of a space with a leader on it.
      * @param player
      */
     private void applyGoeringPenalty(Player player){
-        // TODO Apply this effect
+        if (model.getGame().getCurrentPlayer().getItems().isEmpty())
+            return;
+        Item item = null;
+        if (model.getGame().getCurrentPlayer().getItems().size() == 1) {
+            item = model.getGame().getCurrentPlayer().getItems().get(0);
+            ViewUtil.popupNotify("Goering forced you to discard your " + item.getType());
+        }
+        else
+            item = (Item) ViewUtil.popupDropdown("Goering Penalty", "Discard one item", model.getGame().getCurrentPlayer().getItems().toArray(new Item[0]));
+        model.getGame().getCurrentPlayer().getItems().remove(item);
     }
 
     /**
@@ -322,7 +543,16 @@ if you move onto or off of a space with a leader on it.
      * @param player
      */
     private void applyHessPenalty(Player player){
-        // TODO Apply this effect
+        if (model.getGame().getCurrentPlayer().getDossier().isEmpty())
+            return;
+        ConspiratorCard card = null;
+        if (model.getGame().getCurrentPlayer().getDossier().size() == 1) {
+            card = model.getGame().getCurrentPlayer().getDossier().get(0);
+            ViewUtil.popupNotify("Hess forced you to discard your " + card.getName() + " card");
+        }
+        else
+            card = (ConspiratorCard) ViewUtil.popupDropdown("Hess Penalty", "Discard one card", model.getGame().getCurrentPlayer().getDossier().toArray(new ConspiratorCard[0]));
+        model.getGame().getCurrentPlayer().getDossier().remove(card);
     }
 
     /**
@@ -413,5 +643,114 @@ space.
         }
 
         // No Event card and Documents Located Event conditions are checked in RESOLVE_EVENT phase
+    }
+
+    /**
+     * Once there are 3+ dice on dissent track, current player chooses one:
+     * - One conspirator raises motivation by 1
+     * - Lower Military Support by 1
+     * Remove 3 dice from dissent track
+     */
+    private void handleFullDissentTrack(){
+        if (model.getGame().getDissentTrackDice() < 3){
+            return;
+        }
+
+        DissentReward reward =
+                (DissentReward) ViewUtil.popupDropdown("Dissent Track", "Choose reward",
+                        new DissentReward[]{DissentReward.RAISE_MOTIVATION, DissentReward.LOWER_MILITARY_SUPPORT});
+        switch (reward){
+            case RAISE_MOTIVATION:{
+                Player selected = (Player) ViewUtil.popupDropdown("Dissent Track", "Choose Conspirator to raise Motivation", model.getGame().getPlayers().toArray(new Player[0]));
+                selected.setMotivation(selected.getMotivation().raise());
+                break;
+            }
+            case LOWER_MILITARY_SUPPORT:{
+                model.getGame().adjMilitarySupport(-1);
+                break;
+            }
+        }
+        model.getGame().adjDissentTrackDice(-3);
+    }
+
+    private void handleItemDelivery(){
+        Player player = model.getGame().getCurrentPlayer();
+        Location location = model.getGame().getBoard().getLocationWith(player);
+        if (location.getItem() != null){
+            ViewUtil.popupNotify("You must remove the Item before you can deliver items here");
+            return;
+        }
+        if (player.getItems().isEmpty()){
+            ViewUtil.popupNotify("You have no items to deliver");
+            return;
+        }
+        ItemType deliveryItem = location.getDeliveryItem();
+        Item selectedItem = null;
+        if (deliveryItem == ItemType.ANY){
+            selectedItem = (Item) ViewUtil.popupDropdown("Item Delivery", "Choose Item to deliver", player.getItems().toArray(new Item[0]));
+        }
+        else {
+            Optional<Item> optional = player.getItems().stream().filter(item -> item.getType() == deliveryItem).findFirst();
+            if (!optional.isPresent()){
+                ViewUtil.popupNotify("You don't have a " + deliveryItem + " to deliver");
+                return;
+            }
+            selectedItem = optional.get();
+        }
+        player.getItems().remove(selectedItem);
+        handleLocationModifier(location, location.getDeliveryModifier());
+        currentPlayerActionsTaken += 1;
+    }
+
+    private void handleLocationModifier(Location location, LocationModifier modifier){
+        Player player = model.getGame().getCurrentPlayer();
+        switch (modifier){
+            case SUSPICION_MINUS_2:
+                player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_2_STAGE_2:
+                if (model.getGame().getStage() == 2)
+                    player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_2_STAGE_1:
+                if (model.getGame().getStage() == 1)
+                player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_2_IF_ABWEHR:
+                if (player.getType() == PlayerType.ABWEHR)
+                    player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_2_IF_CIVILIAN:
+                if (player.getType() == PlayerType.CIVILIAN)
+                    player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_2_IF_WEHRMACHT:
+                if (player.getType() == PlayerType.WEHRMACHT)
+                    player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_2_IF_DEPUTY_PRESENT:
+                if (location.getNaziMembers().stream().filter(naziMember -> naziMember != NaziMember.HITLER).count() > 0)
+                    player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_2_IF_HITLER_PRESENT:
+                if (location.getNaziMembers().contains(NaziMember.HITLER))
+                    player.setSuspicion(player.getSuspicion().lower().lower());
+                break;
+            case SUSPICION_MINUS_3_MILITARY_SUPPORT_PLUS_1:
+                player.setSuspicion(player.getSuspicion().lower().lower().lower());
+                model.getGame().adjMilitarySupport(1);
+                break;
+            case SUSPICION_MINUS_3_DISTRIBUTED:
+                // TODO Distribute -3 suspicion across conspirators
+                player.setSuspicion(player.getSuspicion().lower().lower().lower());
+                break;
+            case SUSPICION_PLUS_1:
+                player.setSuspicion(player.getSuspicion().raise());
+                break;
+            case MOTIVATION_PLUS_2_SUSPICION_PLUS_1:
+                player.setMotivation(player.getMotivation().raise().raise());
+                player.setSuspicion(player.getSuspicion().raise());
+                break;
+        }
     }
 }

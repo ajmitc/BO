@@ -9,7 +9,6 @@ import bo.game.item.ItemType;
 import bo.game.location.Board;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
-import bo.game.util.DieResult;
 
 import java.util.*;
 
@@ -119,6 +118,8 @@ public class Game {
             index = (index + 1) % players.size();
             currentPlayer = players.get(index);
         }
+        else if (!players.isEmpty())
+            currentPlayer = players.get(0);
     }
 
     public int getMilitarySupport() {

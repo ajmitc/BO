@@ -1,7 +1,6 @@
 package bo.game.location;
 
 import bo.game.NaziMember;
-import bo.game.item.Item;
 import bo.game.item.ItemType;
 import bo.game.player.Player;
 
@@ -9,7 +8,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Board {
-    public static final List<LocationName> LOCATIONS_NO_ITEM = Arrays.asList(LocationName.TRAIN_STATION, LocationName.ZURICH, LocationName.STOCKHOLM, LocationName.AUSCHWITZ, LocationName.TREBLINKA, LocationName.PARIS);
+    public static final List<LocationName> LOCATIONS_NO_ITEM = Arrays.asList(LocationName.TRAIN_STATION, LocationName.ZURICH, LocationName.STOCKHOLM, LocationName.AUSCHWITZ, LocationName.TREBLINKA, LocationName.PARIS, LocationName.JAIL);
 
     private Map<LocationName, Location> locations = new HashMap<>();
     private Map<LocationName, Set<LocationName>> connections = new HashMap<>();
@@ -36,6 +35,48 @@ public class Board {
         getLocation(LocationName.BORISOV).setValidStages(5, 6);
         getLocation(LocationName.SMOLENSK).setValidStages(5, 6);
         getLocation(LocationName.WEHRWOLF).setValidStages(5, 6);
+
+        getLocation(LocationName.CHANCELLERY).setFortified(true);
+        getLocation(LocationName.WOLFSSCHLUCHT).setFortified(true);
+        getLocation(LocationName.ADLERHORST).setFortified(true);
+        getLocation(LocationName.TANNENBERG).setFortified(true);
+        getLocation(LocationName.WOLFSSCHANZE).setFortified(true);
+        getLocation(LocationName.ANLAGE_SUD).setFortified(true);
+        getLocation(LocationName.WEHRWOLF).setFortified(true);
+        getLocation(LocationName.SMOLENSK).setFortified(true);
+        getLocation(LocationName.WASSERBURG).setFortified(true);
+
+        getLocation(LocationName.DEUTSCHLANDHALLE).setDelivery(ItemType.MAP, LocationModifier.SUSPICION_MINUS_2);
+        getLocation(LocationName.CHANCELLERY).setDelivery(ItemType.WEAPONS, LocationModifier.SUSPICION_MINUS_2);
+        getLocation(LocationName.GESTAPO_HQ).setDelivery(ItemType.INTEL, LocationModifier.SUSPICION_MINUS_2);
+        getLocation(LocationName.ZEUGHAUS).setDelivery(ItemType.KEYS, LocationModifier.SUSPICION_MINUS_2);
+        getLocation(LocationName.SPORTPALAST).setDelivery(ItemType.BADGE, LocationModifier.SUSPICION_MINUS_2);
+        getLocation(LocationName.MINISTRY_OF_PROPOGANDA).setDelivery(ItemType.SIGNATURE, LocationModifier.SUSPICION_MINUS_2);
+
+        getLocation(LocationName.HANNOVER).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_IF_DEPUTY_PRESENT);
+        getLocation(LocationName.ADLERHORST).setDelivery(ItemType.EXPLOSIVES, LocationModifier.SUSPICION_MINUS_2);
+        getLocation(LocationName.WOLFSSCHLUCHT).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_IF_ABWEHR);
+        getLocation(LocationName.NUREMBERG).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_IF_HITLER_PRESENT);
+        getLocation(LocationName.TANNENBERG).setDelivery(ItemType.POISON, LocationModifier.SUSPICION_MINUS_2);
+        getLocation(LocationName.MUNICH).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_STAGE_1);
+        getLocation(LocationName.BERGHOF).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_IF_HITLER_PRESENT);
+        getLocation(LocationName.VIENNA).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_STAGE_2);
+        getLocation(LocationName.PRAGUE).setDelivery(ItemType.SIGNATURE, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.POSEN).setDelivery(ItemType.BADGE, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.WARSAW).setDelivery(ItemType.INTEL, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.ANLAGE_SUD).setDelivery(ItemType.POISON, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.WOLFSSCHANZE).setDelivery(ItemType.KEYS, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.BORISOV).setDelivery(ItemType.MAP, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.SMOLENSK).setDelivery(ItemType.EXPLOSIVES, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.WASSERBURG).setDelivery(ItemType.WEAPONS, LocationModifier.SUSPICION_MINUS_3_DISTRIBUTED);
+        getLocation(LocationName.RIGA).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_IF_CIVILIAN);
+        getLocation(LocationName.WEHRWOLF).setDelivery(ItemType.ANY, LocationModifier.SUSPICION_MINUS_2_IF_WEHRMACHT);
+
+        getLocation(LocationName.PARIS).setLocationModifier(LocationModifier.SUSPICION_MINUS_3_MILITARY_SUPPORT_PLUS_1);
+        getLocation(LocationName.ZURICH).setLocationModifier(LocationModifier.SUSPICION_PLUS_1);
+        getLocation(LocationName.STOCKHOLM).setLocationModifier(LocationModifier.SUSPICION_PLUS_1);
+        getLocation(LocationName.AUSCHWITZ).setLocationModifier(LocationModifier.MOTIVATION_PLUS_2_SUSPICION_PLUS_1);
+        getLocation(LocationName.TREBLINKA).setLocationModifier(LocationModifier.MOTIVATION_PLUS_2_SUSPICION_PLUS_1);
 
         locations.keySet().stream().forEach(name -> connections.put(name, new HashSet<>()));
         connectAll(LocationName.DEUTSCHLANDHALLE, LocationName.MINISTRY_OF_PROPOGANDA, LocationName.CHANCELLERY, LocationName.GESTAPO_HQ, LocationName.ZEUGHAUS, LocationName.SPORTPALAST, LocationName.TRAIN_STATION);
