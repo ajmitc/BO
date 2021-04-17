@@ -45,7 +45,7 @@ public class InterrogationDeck extends Deck<InterrogationCard> {
      * @return
      */
     public InterrogationCard drawFullyApplicable(InterrogationEffectResolver resolver){
-        shuffle();
+        shuffleDiscardIntoDeck();
         while (true){
             InterrogationCard card = draw();
             // If we've exhausted all cards, break

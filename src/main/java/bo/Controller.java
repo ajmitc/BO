@@ -6,6 +6,8 @@ import bo.game.conspirator.ConspiratorEffectResolver;
 import bo.game.event.EventCard;
 import bo.game.event.EventCardType;
 import bo.game.event.EventResolver;
+import bo.game.interrogation.InterrogationCard;
+import bo.game.interrogation.InterrogationEffect;
 import bo.game.interrogation.InterrogationEffectResolver;
 import bo.game.item.Item;
 import bo.game.item.ItemType;
@@ -423,6 +425,10 @@ moves to GESTAPO HQ at high suspicion.
                             break;
                         }
                         case TAKE_ACTIONS_CHOOSE_ACTION: {
+                            if (model.getGame().getCurrentPlayer().isArrested()){
+                                model.getGame().setPhase(Phase.RESOLVE_EVENT);
+                                break;
+                            }
                             if (currentPlayerActionsTaken == currentPlayerActionsAllowed){
                                 model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                                 break;
@@ -439,8 +445,26 @@ moves to GESTAPO HQ at high suspicion.
                 case DRAW_INTERROGATION_CARD:{
                     switch (model.getGame().getPhaseStep()){
                         case START_PHASE: {
-                            // TODO Draw an interrogation card (if no option can be applied in-full, choose another card) and choose one option
-                            // TODO Player could choose "Try and Resist" instead of choosing an option on card
+                            // Draw an interrogation card (if no option can be applied in-full, choose another card) and choose one option
+                            InterrogationCard interrogationCard = model.getGame().getInterrogationDeck().drawFullyApplicable(interrogationEffectResolver);
+
+                            // Player could choose "Try and Resist" instead of choosing an option on card
+                            List<InterrogationEffect> effects = new ArrayList<>();
+                            for (int i = 0; i < 3; ++i) {
+                                if (interrogationEffectResolver.isFullyApplicable(interrogationCard.getEffects()[i])) {
+                                    effects.add(interrogationCard.getEffects()[i]);
+                                }
+                            }
+                            effects.add(InterrogationEffect.TRY_AND_RESIST);
+                            InterrogationEffect effect = (InterrogationEffect)
+                                    ViewUtil.popupDropdown("Interrogation", "Choose Effect", effects.toArray(new InterrogationEffect[0]));
+                            if (effect == InterrogationEffect.TRY_AND_RESIST){
+                                // TODO How does this work?
+                            }
+                            else {
+                                interrogationEffectResolver.resolveEffect(effect);
+                            }
+                            model.getGame().getInterrogationDeck().discard(interrogationCard);
                             model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                             break;
                         }
@@ -454,11 +478,13 @@ moves to GESTAPO HQ at high suspicion.
                 case RESOLVE_EVENT: {
                     switch (model.getGame().getPhaseStep()){
                         case START_PHASE: {
-                            resolveEvent();
+                            for (int i = 0; i < model.getGame().getNumEventCardsToResolve(); ++i)
+                                resolveEvent();
                             model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                             break;
                         }
                         case END_PHASE: {
+                            model.getGame().setNumEventCardsToResolve(1);
                             model.getGame().setPhase(Phase.NEXT_PLAYER);
                             break;
                         }

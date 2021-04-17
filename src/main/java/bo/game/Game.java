@@ -29,6 +29,8 @@ public class Game {
     private EventCard currentEventCard;
     private EventCard currentKeyEventCard;
 
+    private int numEventCardsToResolve = 1;
+
     private boolean hessTokenOnBoard = true;
 
     public Game(){
@@ -72,6 +74,12 @@ public class Game {
         board.getLocation(LocationName.NUREMBERG).getNaziMembers().add(NaziMember.BORMANN);
         board.getLocation(LocationName.MINISTRY_OF_PROPOGANDA).getNaziMembers().add(NaziMember.GOEBBELS);
         board.getLocation(LocationName.GESTAPO_HQ).getNaziMembers().add(NaziMember.HIMMLER);
+    }
+
+    public void arrest(Player player){
+        player.setArrested(true);
+        board.move(player, LocationName.JAIL);
+        // TODO Remove all restricted cards from dossier
     }
 
     public Phase getPhase() {
@@ -200,5 +208,13 @@ public class Game {
 
     public void setHessTokenOnBoard(boolean hessTokenOnBoard) {
         this.hessTokenOnBoard = hessTokenOnBoard;
+    }
+
+    public int getNumEventCardsToResolve() {
+        return numEventCardsToResolve;
+    }
+
+    public void setNumEventCardsToResolve(int numEventCardsToResolve) {
+        this.numEventCardsToResolve = numEventCardsToResolve;
     }
 }
