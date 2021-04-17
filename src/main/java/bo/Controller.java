@@ -2,8 +2,11 @@ package bo;
 
 import bo.game.*;
 import bo.game.conspirator.ConspiratorCard;
+import bo.game.conspirator.ConspiratorEffectResolver;
 import bo.game.event.EventCard;
 import bo.game.event.EventCardType;
+import bo.game.event.EventResolver;
+import bo.game.interrogation.InterrogationEffectResolver;
 import bo.game.item.Item;
 import bo.game.item.ItemType;
 import bo.game.location.Location;
@@ -30,6 +33,8 @@ public class Controller {
     private View view;
 
     private EventResolver eventResolver;
+    private ConspiratorEffectResolver conspiratorEffectResolver;
+    private InterrogationEffectResolver interrogationEffectResolver;
 
     private int currentPlayerActionsAllowed = 3;
     private int currentPlayerActionsTaken = 0;
@@ -42,6 +47,8 @@ public class Controller {
         this.model = model;
         this.view = view;
         this.eventResolver = new EventResolver(model, view);
+        this.conspiratorEffectResolver = new ConspiratorEffectResolver(model, view);
+        this.interrogationEffectResolver = new InterrogationEffectResolver(model, view);
 
         view.getMainMenuPanel().getBtnNewGame().addActionListener(new AbstractAction() {
             @Override
@@ -124,6 +131,7 @@ Roll all of those dice and resolve the results in this order:
                             model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer()).getPlayers().stream().forEach(player -> {
                                 player.setSuspicion(player.getSuspicion().raise());
                             });
+                            // TODO If a player has Defections And Dissent Conspirator Card, it is discarded
                             break;
                         }
                         case TARGET:{
@@ -132,6 +140,8 @@ Roll all of those dice and resolve the results in this order:
                             if (model.getGame().getDissentTrackDice() >= 3){
                                 handleFullDissentTrack();
                             }
+                            // TODO If a player has Defections and Dissent Conspirator card, ask if they want to put this Target die on it
+                            // TODO If two or more dice on this card, decrease Military Support by 1 and return dice to the display
                             break;
                         }
                         default:{
@@ -181,16 +191,17 @@ game effect and may be moved into or out of freely.
 
         /*
         ACT
-        Resolve one effect in your dossier or on your conspirator sheet preceded by the ~ symbol.
-        Lightning EFFECTS - An effect preceded by the lightning symbol does not require an action to resolve. Lightning effects can be resolved at any
-        time, even on another player’s turn.
+        Resolve one effect in your dossier
          */
         view.getGamePanel().getActionPanel().getBtnPlayCard().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 // TODO Choose card to play (maybe a dropdown for now, then let player click on card image)
                 // TODO Maybe open separate dialog with card choices
-                // TODO Discard played card when finished
+                ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Act (Play Card)", "Choose a card to play", model.getGame().getCurrentPlayer().getDossier().toArray(new ConspiratorCard[0]));
+                conspiratorEffectResolver.resolveEffect(card.getEffect());
+                // Discard played card when finished
+                model.getGame().getConspiratorDeck().discard(card);
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -249,7 +260,7 @@ an event card.
         view.getGamePanel().getActionPanel().getBtnTransferCardTile().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-
+                // TODO Implement this
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -262,7 +273,16 @@ Flip a face-down item tile in your space face-up.
         view.getGamePanel().getActionPanel().getBtnRevealItem().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-
+                Item item = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer()).getItem();
+                if (item == null){
+                    ViewUtil.popupNotify("No item to reveal!");
+                    return;
+                }
+                if (item.isRevealed()){
+                    ViewUtil.popupNotify("Item is already revealed!");
+                    return;
+                }
+                item.setRevealed(true);
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -382,7 +402,11 @@ moves to GESTAPO HQ at high suspicion.
                             break;
                         }
                         case END_PHASE: {
-                            model.getGame().setPhase(Phase.TAKE_ACTIONS);
+                            if (model.getGame().getCurrentPlayer().isArrested()){
+                                model.getGame().setPhase(Phase.DRAW_INTERROGATION_CARD);
+                            }
+                            else
+                                model.getGame().setPhase(Phase.TAKE_ACTIONS);
                             break;
                         }
                     }
@@ -404,6 +428,21 @@ moves to GESTAPO HQ at high suspicion.
                                 break;
                             }
                             return;
+                        }
+                        case END_PHASE: {
+                            model.getGame().setPhase(Phase.RESOLVE_EVENT);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case DRAW_INTERROGATION_CARD:{
+                    switch (model.getGame().getPhaseStep()){
+                        case START_PHASE: {
+                            // TODO Draw an interrogation card (if no option can be applied in-full, choose another card) and choose one option
+                            // TODO Player could choose "Try and Resist" instead of choosing an option on card
+                            model.getGame().setPhaseStep(PhaseStep.END_PHASE);
+                            break;
                         }
                         case END_PHASE: {
                             model.getGame().setPhase(Phase.RESOLVE_EVENT);

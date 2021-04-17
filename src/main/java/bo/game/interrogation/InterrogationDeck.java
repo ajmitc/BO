@@ -1,5 +1,6 @@
 package bo.game.interrogation;
 
+import bo.Model;
 import bo.game.Deck;
 
 public class InterrogationDeck extends Deck<InterrogationCard> {
@@ -36,5 +37,38 @@ public class InterrogationDeck extends Deck<InterrogationCard> {
                 InterrogationEffect.FORCE_DISCARD_ALL_RESTRICTED_CARDS));
 
         shuffle();
+    }
+
+    /**
+     * Return an Interrogation Card that has at least one option that is fully applicable to the current game state.
+     * @param resolver
+     * @return
+     */
+    public InterrogationCard drawFullyApplicable(InterrogationEffectResolver resolver){
+        shuffle();
+        while (true){
+            InterrogationCard card = draw();
+            // If we've exhausted all cards, break
+            if (card == null)
+                break;
+            // If this card has at least one option that can be fully applied, return it
+            if (hasFullyApplicableOption(resolver, card)){
+                return card;
+            }
+            // Card doesn't have fully-applicable option, discard it and draw again
+            discard(card);
+        }
+        shuffleDiscardIntoDeck();
+        // No card available - player must "Try and Resist"
+        return null;
+    }
+
+    private boolean hasFullyApplicableOption(InterrogationEffectResolver resolver, InterrogationCard card){
+        for (InterrogationEffect effect: card.getEffects()){
+            if (resolver.isFullyApplicable(effect)){
+                return true;
+            }
+        }
+        return false;
     }
 }

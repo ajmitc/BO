@@ -1,6 +1,9 @@
-package bo.game;
+package bo.game.event;
 
 import bo.Model;
+import bo.game.Deck;
+import bo.game.NaziMember;
+import bo.game.Phase;
 import bo.game.conspirator.ConspiratorCard;
 import bo.game.conspirator.ConspiratorCardType;
 import bo.game.event.EventCard;
