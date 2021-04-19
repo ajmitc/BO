@@ -2,6 +2,8 @@ package bo;
 
 import bo.game.*;
 import bo.game.conspirator.ConspiratorCard;
+import bo.game.conspirator.ConspiratorCardPlayTiming;
+import bo.game.conspirator.ConspiratorCardType;
 import bo.game.conspirator.ConspiratorEffectResolver;
 import bo.game.event.EventCard;
 import bo.game.event.EventCardType;
@@ -16,6 +18,8 @@ import bo.game.location.LocationModifier;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
 import bo.game.player.PlayerType;
+import bo.game.player.Suspicion;
+import bo.game.plot.Plot;
 import bo.game.util.DieResult;
 import bo.game.util.DissentReward;
 import bo.game.util.Util;
@@ -25,10 +29,8 @@ import bo.view.util.ViewUtil;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class Controller {
     private Model model;
@@ -58,8 +60,11 @@ public class Controller {
                 Game game = new Game();
                 model.setGame(game);
 
-                // TODO Allow user to set difficulty and player roles
-                game.setDifficulty(Difficulty.STANDARD);
+                // Allow user to set difficulty
+                Difficulty difficulty = (Difficulty) ViewUtil.popupDropdown("Setup", "Select Difficulty", Difficulty.values());
+                game.setDifficulty(difficulty);
+
+                // TODO Allow user to set player roles
                 game.getPlayers().add(new Player(Player.BECK));
                 game.getPlayers().add(new Player(Player.OSTER));
 
@@ -185,7 +190,21 @@ game effect and may be moved into or out of freely.
         view.getGamePanel().getActionPanel().getBtnMove().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
+                Location myLocation = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
+                Set<LocationName> connectionNames = model.getGame().getBoard().getConnections(myLocation.getName());
+                LocationName destName = (LocationName) ViewUtil.popupDropdown("Move", "Where do you want to move to?", connectionNames.toArray(new LocationName[0]));
+                Location dest = model.getGame().getBoard().getLocation(destName);
+                if (model.getGame().getStage() >= dest.getMinStage() && model.getGame().getStage() <= dest.getMaxStage()){
+                    model.getGame().getBoard().move(model.getGame().getCurrentPlayer(), destName);
 
+                    if (dest.getLocationModifier() != null){
+                        applyLocationModifier(dest, dest.getLocationModifier());
+                    }
+                }
+                else {
+                    ViewUtil.popupNotify("That location is locked");
+                    return;
+                }
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -201,9 +220,14 @@ game effect and may be moved into or out of freely.
                 // TODO Choose card to play (maybe a dropdown for now, then let player click on card image)
                 // TODO Maybe open separate dialog with card choices
                 ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Act (Play Card)", "Choose a card to play", model.getGame().getCurrentPlayer().getDossier().toArray(new ConspiratorCard[0]));
-                conspiratorEffectResolver.resolveEffect(card.getEffect());
-                // Discard played card when finished
-                model.getGame().getConspiratorDeck().discard(card);
+                if (card.getType() == ConspiratorCardType.PLOT){
+                    attemptPlot(card);
+                }
+                else {
+                    conspiratorEffectResolver.resolveEffect(card.getEffect());
+                    // Discard played card when finished
+                    model.getGame().getConspiratorDeck().discard(card);
+                }
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -212,9 +236,17 @@ game effect and may be moved into or out of freely.
         view.getGamePanel().getActionPanel().getBtnPlayLightningCard().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                // TODO Choose card to play - get all lightning cards from all players
+                // Choose card to play - get all lightning cards from all players
+                List<ConspiratorCard> cards =
+                        model.getGame().getPlayers().stream()
+                                .map(player -> player.getDossier()).flatMap(Collection::parallelStream)
+                                .filter(card -> card.getTiming() == ConspiratorCardPlayTiming.ANY_TURN_NOT_AN_ACTION)
+                                .collect(Collectors.toList());
                 // TODO Maybe open separate dialog with card choices
-                // TODO Discard played card when finished
+                ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Act (Play Card)", "Choose a card to play", cards.toArray(new ConspiratorCard[0]));
+                conspiratorEffectResolver.resolveEffect(card.getEffect());
+                // Discard played card when finished
+                model.getGame().getConspiratorDeck().discard(card);
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -262,7 +294,87 @@ an event card.
         view.getGamePanel().getActionPanel().getBtnTransferCardTile().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                // TODO Implement this
+                Location location = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
+                if (location.getPlayers().size() == 1){
+                    ViewUtil.popupNotify("There is no one else in your location to transfer with");
+                    return;
+                }
+
+                Player currentPlayer = model.getGame().getCurrentPlayer();
+
+                Player other = null;
+                if (location.getPlayers().size() == 2)
+                    other = location.getPlayers().get(0) == currentPlayer? location.getPlayers().get(1): location.getPlayers().get(0);
+                else {
+                    other = (Player) ViewUtil.popupDropdown("Transfer", "Select player to transfer with", location.getPlayers().toArray(new Player[0]));
+                }
+
+                if (ViewUtil.popupConfirm("Transfer", "Do you want to transfer a card?")){
+                    if (ViewUtil.popupConfirm("Transfer", "Do you want to give a card?")) {
+                        if (currentPlayer.getDossier().isEmpty()){
+                            ViewUtil.popupNotify("You don't have any cards to give");
+                            return;
+                        }
+                        ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to give", currentPlayer.getDossier().toArray(new ConspiratorCard[0]));
+                        other.getDossier().add(card);
+                        currentPlayer.getDossier().remove(card);
+
+                        if (other.getDossier().size() > other.getDossierMaxSize(model.getGame().getPlayers().size())){
+                            ViewUtil.popupNotify(other.getName() + " has too many cards now, select 1 card to discard");
+                            ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to discard", other.getDossier().toArray(new ConspiratorCard[0]));
+                            other.getDossier().remove(cardToDiscard);
+                            model.getGame().getConspiratorDeck().discard(cardToDiscard);
+                        }
+                    }
+                    else {
+                        if (other.getDossier().isEmpty()){
+                            ViewUtil.popupNotify(other.getName() + " doesn't have any cards to give");
+                            return;
+                        }
+                        ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to give", other.getDossier().toArray(new ConspiratorCard[0]));
+                        currentPlayer.getDossier().add(card);
+                        other.getDossier().remove(card);
+
+                        if (currentPlayer.getDossier().size() > currentPlayer.getDossierMaxSize(model.getGame().getPlayers().size())){
+                            ViewUtil.popupNotify(currentPlayer.getName() + " has too many cards now, select 1 card to discard");
+                            ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to discard", currentPlayer.getDossier().toArray(new ConspiratorCard[0]));
+                            currentPlayer.getDossier().remove(cardToDiscard);
+                            model.getGame().getConspiratorDeck().discard(cardToDiscard);
+                        }
+                    }
+                }
+                else {
+                    if (ViewUtil.popupConfirm("Transfer", "Do you want to give an item?")) {
+                        if (currentPlayer.getItems().isEmpty()){
+                            ViewUtil.popupNotify("You don't have any items to give");
+                            return;
+                        }
+                        Item item = (Item) ViewUtil.popupDropdown("Transfer", "Select item to give", currentPlayer.getItems().toArray(new Item[0]));
+                        other.getItems().add(item);
+                        currentPlayer.getItems().remove(item);
+
+                        if (other.getItems().size() > other.getMaxItems(model.getGame().getPlayers().size())){
+                            ViewUtil.popupNotify(other.getName() + " has too many items now, select 1 item to discard");
+                            Item itemToDiscard = (Item) ViewUtil.popupDropdown("Transfer", "Select item to discard", other.getItems().toArray(new Item[0]));
+                            other.getItems().remove(itemToDiscard);
+                        }
+                    }
+                    else {
+                        if (other.getItems().isEmpty()){
+                            ViewUtil.popupNotify(other.getName() + " doesn't have any items to give");
+                            return;
+                        }
+                        Item item = (Item) ViewUtil.popupDropdown("Transfer", "Select item to give", other.getItems().toArray(new Item[0]));
+                        currentPlayer.getItems().add(item);
+                        other.getItems().remove(item);
+
+                        if (currentPlayer.getItems().size() > currentPlayer.getMaxItems(model.getGame().getPlayers().size())){
+                            ViewUtil.popupNotify(currentPlayer.getName() + " has too many items now, select 1 item to discard");
+                            Item itemToDiscard = (Item) ViewUtil.popupDropdown("Transfer", "Select item to discard", currentPlayer.getItems().toArray(new Item[0]));
+                            currentPlayer.getItems().remove(itemToDiscard);
+                        }
+                    }
+                }
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -339,12 +451,14 @@ they choose, regardless of location. However, if a player is in PRISON, they can
 
         /*
 RELEASE
-$ | If you are at extreme suspicion, you cannot take this action.
+If you are at extreme suspicion, you cannot take this action.
+
 You can attempt to use your standing and influence to order a
 conspirator to be released from prison. (See Arrest and Prison
 on page 9). You must be in the GESTAPO HQ space in order
 to take this action.
-Roll one die. If you rolled # , you’ve asked too many suspicious
+
+Roll one die. If you rolled eagle, you’ve asked too many suspicious
 questions and instead of freeing your ally, you are arrested. If
 you rolled any other result, raise your suspicion by 1 and choose
 one arrested conspirator to release. The released conspirator
@@ -353,6 +467,32 @@ moves to GESTAPO HQ at high suspicion.
         view.getGamePanel().getActionPanel().getBtnRelease().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
+                if (model.getGame().getCurrentPlayer().getSuspicion() == Suspicion.EXTREME){
+                    ViewUtil.popupNotify("You are at EXTREME Suspicion, you cannot take the Release action");
+                    return;
+                }
+                Location location = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
+                if (location.getName() != LocationName.GESTAPO_HQ){
+                    ViewUtil.popupNotify("You must be at the Gestapo HQ to take the Release action");
+                    return;
+                }
+
+                List<Player> playersInPrison = model.getGame().getPlayers().stream().filter(player -> player.isArrested()).collect(Collectors.toList());
+
+                DieResult dieResult = Util.roll();
+                if (dieResult == DieResult.EAGLE){
+                    model.getGame().arrest(model.getGame().getCurrentPlayer());
+                }
+                else {
+                    model.getGame().getCurrentPlayer().setSuspicion(model.getGame().getCurrentPlayer().getSuspicion().raise());
+                    // Choose player to release
+                    Player other = playersInPrison.get(0);
+                    if (playersInPrison.size() > 1)
+                        other = (Player) ViewUtil.popupDropdown("Release", "Choose player to release from prison", playersInPrison.toArray(new Player[0]));
+                    other.setArrested(false);
+                    other.setSuspicion(Suspicion.HIGH);
+                    model.getGame().getBoard().move(other, LocationName.GESTAPO_HQ);
+                }
 
                 currentPlayerActionsTaken += 1;
                 run();
@@ -371,6 +511,8 @@ moves to GESTAPO HQ at high suspicion.
                     return;
                 }
 
+                // TODO Implement this
+
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -378,6 +520,7 @@ moves to GESTAPO HQ at high suspicion.
     }
 
     public void run(){
+        checkGameOver();
         // 1 | Check for Hitler and deputies.
         // 2 | Take up to 3 actions.
         // 3 | Draw an event card.
@@ -405,7 +548,7 @@ moves to GESTAPO HQ at high suspicion.
                         }
                         case END_PHASE: {
                             if (model.getGame().getCurrentPlayer().isArrested()){
-                                model.getGame().setPhase(Phase.DRAW_INTERROGATION_CARD);
+                                model.getGame().setPhase(Phase.PRISON);
                             }
                             else
                                 model.getGame().setPhase(Phase.TAKE_ACTIONS);
@@ -442,29 +585,62 @@ moves to GESTAPO HQ at high suspicion.
                     }
                     break;
                 }
-                case DRAW_INTERROGATION_CARD:{
+                case PRISON:{
                     switch (model.getGame().getPhaseStep()){
                         case START_PHASE: {
+                            DieResult dieResult = Util.roll();
+                            boolean resisted = false;
+                            boolean released = dieResult == DieResult.TARGET;
+                            switch (model.getGame().getCurrentPlayer().getMotivation()){
+                                case TIMID:
+                                    break;
+                                case SKEPTICAL:
+                                    resisted = dieResult == DieResult.TARGET;
+                                    break;
+                                case MOTIVATED:
+                                    resisted = dieResult == DieResult.TARGET || dieResult == DieResult.THREE;
+                                    break;
+                                case COMMITTED:
+                                    resisted = dieResult == DieResult.TARGET || dieResult == DieResult.TWO || dieResult == DieResult.THREE;
+                                    break;
+                                case RECKLESS:
+                                    resisted = dieResult != DieResult.EAGLE;
+                                    break;
+                            }
+                            if (released){
+                                ViewUtil.popupNotify("The authorities agree to release " + model.getGame().getCurrentPlayer().getName() + " after his interrogation");
+                                model.getGame().getCurrentPlayer().setArrested(false);
+                            }
+                            if (!resisted){
+                                ViewUtil.popupNotify(model.getGame().getCurrentPlayer().getName() + " failed to resist interrogation");
+                                model.getGame().setPhaseStep(PhaseStep.PRISON_DRAW_INTERROGATION_CARD);
+                                break;
+                            }
+                            else {
+                                ViewUtil.popupNotify(model.getGame().getCurrentPlayer().getName() + " successfully resisted interrogation");
+                            }
+                            model.getGame().setPhaseStep(PhaseStep.END_PHASE);
+                            break;
+                        }
+                        case PRISON_DRAW_INTERROGATION_CARD: {
                             // Draw an interrogation card (if no option can be applied in-full, choose another card) and choose one option
                             InterrogationCard interrogationCard = model.getGame().getInterrogationDeck().drawFullyApplicable(interrogationEffectResolver);
 
-                            // Player could choose "Try and Resist" instead of choosing an option on card
-                            List<InterrogationEffect> effects = new ArrayList<>();
-                            for (int i = 0; i < 3; ++i) {
-                                if (interrogationEffectResolver.isFullyApplicable(interrogationCard.getEffects()[i])) {
-                                    effects.add(interrogationCard.getEffects()[i]);
-                                }
-                            }
-                            effects.add(InterrogationEffect.TRY_AND_RESIST);
                             InterrogationEffect effect = (InterrogationEffect)
-                                    ViewUtil.popupDropdown("Interrogation", "Choose Effect", effects.toArray(new InterrogationEffect[0]));
-                            if (effect == InterrogationEffect.TRY_AND_RESIST){
-                                // TODO How does this work?
-                            }
-                            else {
-                                interrogationEffectResolver.resolveEffect(effect);
-                            }
+                                    ViewUtil.popupDropdown("Interrogation", "Choose Effect", interrogationCard.getEffects());
+                            interrogationEffectResolver.resolveEffect(effect);
                             model.getGame().getInterrogationDeck().discard(interrogationCard);
+
+                            if (!model.getGame().getCurrentPlayer().isArrested())
+                                model.getGame().setPhaseStep(PhaseStep.PRISON_RELEASED);
+                            else
+                                model.getGame().setPhaseStep(PhaseStep.END_PHASE);
+                            break;
+                        }
+                        case PRISON_RELEASED:{
+                            ViewUtil.popupNotify(model.getGame().getCurrentPlayer().getName() + " has been released from prison");
+                            model.getGame().getBoard().move(model.getGame().getCurrentPlayer(), LocationName.GESTAPO_HQ);
+                            model.getGame().getCurrentPlayer().setSuspicion(Suspicion.HIGH);
                             model.getGame().setPhaseStep(PhaseStep.END_PHASE);
                             break;
                         }
@@ -473,7 +649,6 @@ moves to GESTAPO HQ at high suspicion.
                             break;
                         }
                     }
-                    break;
                 }
                 case RESOLVE_EVENT: {
                     switch (model.getGame().getPhaseStep()){
@@ -692,7 +867,7 @@ space.
      * - If the Stage 7 event Documents Located is drawn*, you lose the game.
      */
     private void checkGameOver(){
-        Location jail = model.getGame().getBoard().getLocation(LocationName.JAIL);
+        Location jail = model.getGame().getBoard().getLocation(LocationName.PRISON);
         boolean allPlayersInJail = true;
         for (Player player: model.getGame().getPlayers()){
             if (!jail.getPlayers().contains(player)){
@@ -763,13 +938,13 @@ space.
             selectedItem = optional.get();
         }
         player.getItems().remove(selectedItem);
-        handleLocationModifier(location, location.getDeliveryModifier());
+        applyLocationModifier(location, location.getDeliveryModifier());
         currentPlayerActionsTaken += 1;
     }
 
-    private void handleLocationModifier(Location location, LocationModifier modifier){
+    private void applyLocationModifier(Location location, LocationModifier locationModifier){
         Player player = model.getGame().getCurrentPlayer();
-        switch (modifier){
+        switch (locationModifier){
             case SUSPICION_MINUS_2:
                 player.setSuspicion(player.getSuspicion().lower().lower());
                 break;
@@ -779,7 +954,7 @@ space.
                 break;
             case SUSPICION_MINUS_2_STAGE_1:
                 if (model.getGame().getStage() == 1)
-                player.setSuspicion(player.getSuspicion().lower().lower());
+                    player.setSuspicion(player.getSuspicion().lower().lower());
                 break;
             case SUSPICION_MINUS_2_IF_ABWEHR:
                 if (player.getType() == PlayerType.ABWEHR)
@@ -794,19 +969,19 @@ space.
                     player.setSuspicion(player.getSuspicion().lower().lower());
                 break;
             case SUSPICION_MINUS_2_IF_DEPUTY_PRESENT:
-                if (location.getNaziMembers().stream().filter(naziMember -> naziMember != NaziMember.HITLER).count() > 0)
+                if (location.getNaziMembers().stream().anyMatch(naziMember -> naziMember != NaziMember.HITLER))
                     player.setSuspicion(player.getSuspicion().lower().lower());
                 break;
             case SUSPICION_MINUS_2_IF_HITLER_PRESENT:
-                if (location.getNaziMembers().contains(NaziMember.HITLER))
+                if (location.getNaziMembers().stream().anyMatch(naziMember -> naziMember == NaziMember.HITLER))
                     player.setSuspicion(player.getSuspicion().lower().lower());
                 break;
             case SUSPICION_MINUS_3_MILITARY_SUPPORT_PLUS_1:
-                player.setSuspicion(player.getSuspicion().lower().lower().lower());
+                player.setSuspicion(player.getSuspicion().lower().lower());
                 model.getGame().adjMilitarySupport(1);
                 break;
             case SUSPICION_MINUS_3_DISTRIBUTED:
-                // TODO Distribute -3 suspicion across conspirators
+                // TODO Distribute among players
                 player.setSuspicion(player.getSuspicion().lower().lower().lower());
                 break;
             case SUSPICION_PLUS_1:
@@ -816,6 +991,53 @@ space.
                 player.setMotivation(player.getMotivation().raise().raise());
                 player.setSuspicion(player.getSuspicion().raise());
                 break;
+        }
+    }
+
+    private void attemptPlot(ConspiratorCard card){
+        Plot plot = model.getGame().getPlots().get(card.getId());
+        if (!plot.requirementsMet(model.getGame())) {
+            ViewUtil.popupNotify("You don't meet the requirements to play this Plot");
+            return;
+        }
+        int numDice = 1 + plot.getNumFreeExtraDice(model.getGame());
+        List<Item> items = plot.getItemsAvailableForExtraDice(model.getGame());
+        while (!items.isEmpty() && ViewUtil.popupConfirm("Plot Attempt", "Do you want to discard an item to add a die?")){
+            Item item = (Item) ViewUtil.popupDropdown("Plot Attempt", "Choose Item to discard", items.toArray(new Item[0]));
+            numDice += 1;
+            model.getGame().getCurrentPlayer().getItems().remove(item);
+            items.remove(item);
+        }
+        // TODO Add dice granted by conspirator cards
+
+        // TODO Allow user to choose how many dice to roll (max == numDice)
+
+        List<DieResult> dieResults = new ArrayList<>();
+        for (int i = 0; i < numDice; ++i){
+            dieResults.add(Util.roll());
+        }
+
+        // Failure (Detection): Num Eagles >= Suspicion
+        int numEagles = (int) dieResults.stream().filter(dieResult -> dieResult == DieResult.EAGLE).count();
+        int numTargets = (int) dieResults.stream().filter(dieResult -> dieResult == DieResult.TARGET).count();
+        if (numEagles >= model.getGame().getCurrentPlayer().getSuspicion().getNumEaglesForPlotFailure()) {
+            ViewUtil.popupNotify("Plot has been detected!  Player arrested!");
+            // Discard plot
+            model.getGame().getConspiratorDeck().discard(card);
+            model.getGame().getCurrentPlayer().getDossier().remove(card);
+            // Move hitler to Chancellery
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+            // all conspirators lose 1 motivation
+            model.getGame().getPlayers().stream().forEach(player -> {
+                player.setMotivation(player.getMotivation().lower());
+            });
+            // Arrest current player
+            model.getGame().arrest(model.getGame().getCurrentPlayer());
+        }
+        // Success == Num Targets >= Military support
+        else if (numTargets >= model.getGame().getMilitarySupport()){
+            ViewUtil.popupNotify("Hitler has been assassinated!  Players Win!");
+            model.getGame().setPhase(Phase.GAMEOVER);
         }
     }
 }

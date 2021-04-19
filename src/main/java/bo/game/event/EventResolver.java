@@ -419,8 +419,7 @@ public class EventResolver {
     private void handleGestapoRaid(){
         // Conspirators with Extreme suspicion are arrested
         model.getGame().getPlayers().stream().filter(player -> player.getSuspicion() == Suspicion.EXTREME).forEach(player -> {
-            player.setArrested(true);
-            model.getGame().getBoard().move(player, LocationName.JAIL);
+            model.getGame().arrest(player);
         });
         // Conspirators who are NOT arrested may discard any number of cards
         model.getGame().getPlayers().stream().filter(player -> !player.isArrested()).forEach(player -> {
@@ -682,8 +681,7 @@ public class EventResolver {
                 .filter(player -> player.getSuspicion() == Suspicion.HIGH || player.getSuspicion() == Suspicion.EXTREME)
                 .filter(player -> model.getGame().getBoard().getLocationWith(player).getName() == LocationName.PRAGUE)
                 .forEach(player -> {
-                    player.setArrested(true);
-                    model.getGame().getBoard().move(player, LocationName.JAIL);
+                    model.getGame().arrest(player);
                     ViewUtil.popupNotify(player.getName() + " has been arrested!");
                 });
     }
@@ -692,8 +690,7 @@ public class EventResolver {
         Location destination = moveNaziMemberToClosestConspirator(NaziMember.BORMANN);
 
         if (destination.getPlayers().size() == 1){
-            destination.getPlayers().get(0).setArrested(true);
-            model.getGame().getBoard().move(destination.getPlayers().get(0), LocationName.JAIL);
+            model.getGame().arrest(destination.getPlayers().get(0));
             ViewUtil.popupNotify(destination.getPlayers().get(0).getName() + " has been arrested!");
         }
     }

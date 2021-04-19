@@ -190,7 +190,7 @@ public class InterrogationEffectResolver {
                                 .collect(Collectors.toList());
                 Player selected = (Player) ViewUtil.popupDropdown("Interrogation", "Choose Player to arrest", candidates.toArray(new Player[0]));
                 selected.setArrested(true);
-                model.getGame().getBoard().move(selected, LocationName.JAIL);
+                model.getGame().getBoard().move(selected, LocationName.PRISON);
                 break;
             }
             case REMOVE_ALL_ITEMS_FROM_STAGE1_STAGE2_LOCATIONS: {

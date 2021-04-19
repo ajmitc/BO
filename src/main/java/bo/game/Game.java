@@ -1,5 +1,6 @@
 package bo.game;
 
+import bo.game.conspirator.ConspiratorCardType;
 import bo.game.conspirator.ConspiratorDeck;
 import bo.game.event.EventCard;
 import bo.game.event.EventCardDeck;
@@ -9,6 +10,8 @@ import bo.game.item.ItemType;
 import bo.game.location.Board;
 import bo.game.location.LocationName;
 import bo.game.player.Player;
+import bo.game.plot.Plot;
+import bo.game.plot.PlotA;
 
 import java.util.*;
 
@@ -32,6 +35,8 @@ public class Game {
     private int numEventCardsToResolve = 1;
 
     private boolean hessTokenOnBoard = true;
+
+    private Map<String, Plot> plots = new HashMap<>();
 
     public Game(){
         phase = Phase.SETUP;
@@ -74,12 +79,31 @@ public class Game {
         board.getLocation(LocationName.NUREMBERG).getNaziMembers().add(NaziMember.BORMANN);
         board.getLocation(LocationName.MINISTRY_OF_PROPOGANDA).getNaziMembers().add(NaziMember.GOEBBELS);
         board.getLocation(LocationName.GESTAPO_HQ).getNaziMembers().add(NaziMember.HIMMLER);
+
+        PlotA plotA = new PlotA();
+        plots.put(plotA.getId(), plotA);
     }
 
+    /**
+     * Arrest the given player
+     *
+     * You can’t take actions or resolve lightning effects.
+     * - You can’t be the target of, and are unaffected by, all effects (including effects from event and interrogation cards) unless the effect specifically
+     *   states that you are released.
+     * - Your special ability is treated as if it were blank.
+     * - Once you’ve chosen which option to resolve, read it aloud and apply its effects, but do not reveal the other options.
+     *   You choose the target for all effects.
+     * - You keep all of your items and non-illegal cards in your dossier.
+     *
+     * @param player
+     */
     public void arrest(Player player){
         player.setArrested(true);
-        board.move(player, LocationName.JAIL);
-        // TODO Remove all restricted cards from dossier
+        board.move(player, LocationName.PRISON);
+        // Remove all restricted cards from dossier and discard
+        player.getDossier().stream().filter(card -> card.getType() == ConspiratorCardType.RESTRICTED).forEach(card -> conspiratorDeck.discard(card));
+        player.getDossier().removeIf(card -> card.getType() == ConspiratorCardType.RESTRICTED);
+        // TODO For each RESTRICTED card discarded, discard a non-RESTRICTED card
     }
 
     public Phase getPhase() {
@@ -216,5 +240,9 @@ public class Game {
 
     public void setNumEventCardsToResolve(int numEventCardsToResolve) {
         this.numEventCardsToResolve = numEventCardsToResolve;
+    }
+
+    public Map<String, Plot> getPlots() {
+        return plots;
     }
 }

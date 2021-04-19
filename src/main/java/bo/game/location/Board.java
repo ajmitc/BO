@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Board {
-    public static final List<LocationName> LOCATIONS_NO_ITEM = Arrays.asList(LocationName.TRAIN_STATION, LocationName.ZURICH, LocationName.STOCKHOLM, LocationName.AUSCHWITZ, LocationName.TREBLINKA, LocationName.PARIS, LocationName.JAIL);
+    public static final List<LocationName> LOCATIONS_NO_ITEM = Arrays.asList(LocationName.TRAIN_STATION, LocationName.ZURICH, LocationName.STOCKHOLM, LocationName.AUSCHWITZ, LocationName.TREBLINKA, LocationName.PARIS, LocationName.PRISON);
 
     private Map<LocationName, Location> locations = new HashMap<>();
     private Map<LocationName, Set<LocationName>> connections = new HashMap<>();
@@ -93,7 +93,7 @@ public class Board {
         addConnections(LocationName.WASSERBURG, LocationName.RIGA, LocationName.BORISOV);
         addConnections(LocationName.SMOLENSK, LocationName.BORISOV);
 
-        addConnection(LocationName.GESTAPO_HQ, LocationName.JAIL);
+        addConnection(LocationName.GESTAPO_HQ, LocationName.PRISON);
     }
 
     public void move(NaziMember naziMember, LocationName destination){

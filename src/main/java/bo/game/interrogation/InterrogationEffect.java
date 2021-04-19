@@ -1,7 +1,6 @@
 package bo.game.interrogation;
 
 public enum InterrogationEffect {
-    TRY_AND_RESIST,
     INCREASE_SUSPICION_BY_1_OF_HIGH_OR_LOWER_SUSPICION_PLAYER,
     DECREASE_MOTIVATION_BY_1_OF_SKEPTICAL_OR_HIGHER_MOTIVATION_PLAYER,
     FORCE_PLAYER_TO_DISCARD_2_CARDS,  // must choose player with at least 2 cards
