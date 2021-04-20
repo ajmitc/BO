@@ -2,6 +2,7 @@ package bo.game;
 
 import bo.game.conspirator.ConspiratorCardType;
 import bo.game.conspirator.ConspiratorDeck;
+import bo.game.event.CurrentEventEffect;
 import bo.game.event.EventCard;
 import bo.game.event.EventCardDeck;
 import bo.game.interrogation.InterrogationDeck;
@@ -31,10 +32,13 @@ public class Game {
 
     private EventCard currentEventCard;
     private EventCard currentKeyEventCard;
+    private CurrentEventEffect currentEventEffect;
 
     private int numEventCardsToResolve = 1;
 
     private boolean hessTokenOnBoard = true;
+
+    private boolean abwehrUseSpecialAbilities = true;
 
     private Map<String, Plot> plots = new HashMap<>();
 
@@ -244,5 +248,21 @@ public class Game {
 
     public Map<String, Plot> getPlots() {
         return plots;
+    }
+
+    public boolean isAbwehrUseSpecialAbilities() {
+        return abwehrUseSpecialAbilities;
+    }
+
+    public void setAbwehrUseSpecialAbilities(boolean abwehrUseSpecialAbilities) {
+        this.abwehrUseSpecialAbilities = abwehrUseSpecialAbilities;
+    }
+
+    public CurrentEventEffect getCurrentEventEffect() {
+        return currentEventEffect;
+    }
+
+    public void setCurrentEventEffect(CurrentEventEffect currentEventEffect) {
+        this.currentEventEffect = currentEventEffect;
     }
 }

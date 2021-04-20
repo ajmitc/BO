@@ -5,6 +5,7 @@ import bo.game.conspirator.ConspiratorCard;
 import bo.game.conspirator.ConspiratorCardPlayTiming;
 import bo.game.conspirator.ConspiratorCardType;
 import bo.game.conspirator.ConspiratorEffectResolver;
+import bo.game.event.CurrentEventEffect;
 import bo.game.event.EventCard;
 import bo.game.event.EventCardType;
 import bo.game.event.EventResolver;
@@ -16,9 +17,7 @@ import bo.game.item.ItemType;
 import bo.game.location.Location;
 import bo.game.location.LocationModifier;
 import bo.game.location.LocationName;
-import bo.game.player.Player;
-import bo.game.player.PlayerType;
-import bo.game.player.Suspicion;
+import bo.game.player.*;
 import bo.game.plot.Plot;
 import bo.game.util.DieResult;
 import bo.game.util.DissentReward;
@@ -190,21 +189,7 @@ game effect and may be moved into or out of freely.
         view.getGamePanel().getActionPanel().getBtnMove().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                Location myLocation = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
-                Set<LocationName> connectionNames = model.getGame().getBoard().getConnections(myLocation.getName());
-                LocationName destName = (LocationName) ViewUtil.popupDropdown("Move", "Where do you want to move to?", connectionNames.toArray(new LocationName[0]));
-                Location dest = model.getGame().getBoard().getLocation(destName);
-                if (model.getGame().getStage() >= dest.getMinStage() && model.getGame().getStage() <= dest.getMaxStage()){
-                    model.getGame().getBoard().move(model.getGame().getCurrentPlayer(), destName);
-
-                    if (dest.getLocationModifier() != null){
-                        applyLocationModifier(dest, dest.getLocationModifier());
-                    }
-                }
-                else {
-                    ViewUtil.popupNotify("That location is locked");
-                    return;
-                }
+                while (!move(model.getGame().getCurrentPlayer())){}
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -271,13 +256,22 @@ conspirator deck.
         view.getGamePanel().getActionPanel().getBtnDrawCard().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                int maxCards = model.getGame().getCurrentPlayer().getDossierMaxSize(model.getGame().getPlayers().size());
-                if (model.getGame().getCurrentPlayer().getDossier().size() == maxCards){
-                    ViewUtil.popupNotify("You cannot take any more cards (hand size limit reached)");
-                    return;
+                Player player = model.getGame().getCurrentPlayer();
+                if (player.hasSpecialAbility(PlayerSpecialAbility.ACTION_DRAW_2_CARDS_KEEP_ONE_DISCARD_OTHER)){
+                    handlePlayerSpecialAbility(PlayerSpecialAbility.ACTION_DRAW_2_CARDS_KEEP_ONE_DISCARD_OTHER);
                 }
-                ConspiratorCard card = model.getGame().getConspiratorDeck().draw();
-                model.getGame().getCurrentPlayer().getDossier().add(card);
+                else {
+                    ConspiratorCard card = model.getGame().getConspiratorDeck().draw();
+                    player.getDossier().add(card);
+                }
+
+                int maxCards = player.getDossierMaxSize(model.getGame().getPlayers().size());
+                while (player.getDossier().size() > maxCards) {
+                    ViewUtil.popupNotify(player.getName() + " has too many cards (hand size limit reached)");
+                    ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Hand Limit", "You've exceeded your hand limit.  Choose card to discard.", player.getDossier().toArray(new ConspiratorCard[0]));
+                    player.getDossier().remove(cardToDiscard);
+                    model.getGame().getConspiratorDeck().discard(cardToDiscard);
+                }
                 currentPlayerActionsTaken += 1;
                 run();
             }
@@ -414,7 +408,7 @@ Take a revealed item tile in your space and add it to your conspirator sheet.
                     ViewUtil.popupNotify("No item to collect");
                     return;
                 }
-                if (!location.getItem().isRevealed()){
+                if (!location.getItem().isRevealed() && !model.getGame().getCurrentPlayer().hasSpecialAbility(PlayerSpecialAbility.ACTION_PICK_UP_UNREVEALED_ITEM_SAME_LOCATION)){
                     ViewUtil.popupNotify("Item must be revealed before collecting");
                     return;
                 }
@@ -511,7 +505,23 @@ moves to GESTAPO HQ at high suspicion.
                     return;
                 }
 
-                // TODO Implement this
+                Player player = model.getGame().getCurrentPlayer();
+                if (player.getType() == PlayerType.ABWEHR && !model.getGame().isAbwehrUseSpecialAbilities()){
+                    ViewUtil.popupNotify("Abwehr can no longer use their special abilities");
+                    return;
+                }
+
+                if (player.getMotivation().ordinal() < Motivation.MOTIVATED.ordinal()){
+                    ViewUtil.popupNotify("You must have motivation at MOTIVATED or above");
+                    return;
+                }
+
+                PlayerSpecialAbility specialAbility = player.getSpecialAbilities().iterator().next();
+
+                if (player.getSpecialAbilities().size() > 1)
+                    specialAbility = (PlayerSpecialAbility) ViewUtil.popupDropdown("Act (Special Ability)", "Choose Special Ability", player.getSpecialAbilities().toArray(new PlayerSpecialAbility[]{}));
+
+                handlePlayerSpecialAbility(specialAbility);
 
                 currentPlayerActionsTaken += 1;
                 run();
@@ -519,6 +529,10 @@ moves to GESTAPO HQ at high suspicion.
         });
     }
 
+
+    /**
+     * Progress the game
+     */
     public void run(){
         checkGameOver();
         // 1 | Check for Hitler and deputies.
@@ -561,6 +575,8 @@ moves to GESTAPO HQ at high suspicion.
                     switch (model.getGame().getPhaseStep()){
                         case START_PHASE: {
                             currentPlayerActionsAllowed = 3;
+                            if (model.getGame().getCurrentPlayer().hasSpecialAbility(PlayerSpecialAbility.TAKE_4_ACTIONS))
+                                currentPlayerActionsAllowed = 4;
                             currentPlayerActionsTaken = 0;
                             currentPlayerConspireActionTaken = false;
                             model.getGame().setPhaseStep(PhaseStep.TAKE_ACTIONS_CHOOSE_ACTION);
@@ -705,34 +721,30 @@ space at the start of your turn. You do not suffer a penalty
 if you move onto or off of a space with a leader on it.
      */
     private void checkHitlerAndDeputies(){
-        for (Location location: model.getGame().getBoard().getLocations().values()){
-            for (Player player: location.getPlayers()){
-                if (player == model.getGame().getCurrentPlayer()){
-                    for (NaziMember naziMember: location.getNaziMembers()) {
-                        switch (naziMember) {
-                            case HITLER:
-                                applyHitlerPenalty(player);
-                                break;
-                            case BORMANN:
-                                applyBormannPenalty(player);
-                                break;
-                            case GOEBBELS:
-                                applyGoebbelsPenalty(player);
-                                break;
-                            case GOERING:
-                                applyGoeringPenalty(player);
-                                break;
-                            case HESS:
-                                applyHessPenalty(player);
-                                break;
-                            case HIMMLER:
-                                applyHimmlerPenalty(player);
-                                break;
-                        }
-                    }
-                    // OK, we've handled the current player...don't need to check the rest
-                    return;
-                }
+        Player currentPlayer = model.getGame().getCurrentPlayer();
+        if (currentPlayer.hasSpecialAbility(PlayerSpecialAbility.HITLER_AND_DEPUTY_TOKENS_NO_EFFECT))
+            return;
+        Location playerLocation = model.getGame().getBoard().getLocationWith(currentPlayer);
+        for (NaziMember naziMember: playerLocation.getNaziMembers()) {
+            switch (naziMember) {
+                case HITLER:
+                    applyHitlerPenalty(currentPlayer);
+                    break;
+                case BORMANN:
+                    applyBormannPenalty(currentPlayer);
+                    break;
+                case GOEBBELS:
+                    applyGoebbelsPenalty(currentPlayer);
+                    break;
+                case GOERING:
+                    applyGoeringPenalty(currentPlayer);
+                    break;
+                case HESS:
+                    applyHessPenalty(currentPlayer);
+                    break;
+                case HIMMLER:
+                    applyHimmlerPenalty(currentPlayer);
+                    break;
             }
         }
     }
@@ -847,6 +859,7 @@ space.
         }
 
         // Place it face-up in Event space on board
+        model.getGame().setCurrentEventEffect(null);
         model.getGame().setCurrentEventCard(eventCard);
         view.refresh();
 
@@ -889,6 +902,7 @@ space.
      * Once there are 3+ dice on dissent track, current player chooses one:
      * - One conspirator raises motivation by 1
      * - Lower Military Support by 1
+     * - Raise all player's motivation by 1 (if current event in play)
      * Remove 3 dice from dissent track
      */
     private void handleFullDissentTrack(){
@@ -896,9 +910,17 @@ space.
             return;
         }
 
+        List<DissentReward> rewards = new ArrayList<>();
+        rewards.add(DissentReward.RAISE_MOTIVATION);
+        rewards.add(DissentReward.LOWER_MILITARY_SUPPORT);
+        if (model.getGame().getCurrentEventEffect() == CurrentEventEffect.DISSENT_TRACK_REWARD_ALL_PLAYERS_MAY_INCREASE_MOTIVATION_BY_1){
+            rewards.add(DissentReward.ALL_PLAYERS_INCREASE_MOTIVATION);
+        }
+
         DissentReward reward =
                 (DissentReward) ViewUtil.popupDropdown("Dissent Track", "Choose reward",
-                        new DissentReward[]{DissentReward.RAISE_MOTIVATION, DissentReward.LOWER_MILITARY_SUPPORT});
+                        rewards.toArray(new DissentReward[0]));
+
         switch (reward){
             case RAISE_MOTIVATION:{
                 Player selected = (Player) ViewUtil.popupDropdown("Dissent Track", "Choose Conspirator to raise Motivation", model.getGame().getPlayers().toArray(new Player[0]));
@@ -907,6 +929,12 @@ space.
             }
             case LOWER_MILITARY_SUPPORT:{
                 model.getGame().adjMilitarySupport(-1);
+                break;
+            }
+            case ALL_PLAYERS_INCREASE_MOTIVATION:{
+                model.getGame().getPlayers().stream().forEach(player -> {
+                    player.setMotivation(player.getMotivation().raise());
+                });
                 break;
             }
         }
@@ -1000,6 +1028,8 @@ space.
             ViewUtil.popupNotify("You don't meet the requirements to play this Plot");
             return;
         }
+
+        // Collect Dice
         int numDice = 1 + plot.getNumFreeExtraDice(model.getGame());
         List<Item> items = plot.getItemsAvailableForExtraDice(model.getGame());
         while (!items.isEmpty() && ViewUtil.popupConfirm("Plot Attempt", "Do you want to discard an item to add a die?")){
@@ -1008,7 +1038,17 @@ space.
             model.getGame().getCurrentPlayer().getItems().remove(item);
             items.remove(item);
         }
+
         // TODO Add dice granted by conspirator cards
+
+        // Add die if player has special ability
+        Location location = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
+        for (Player player: location.getPlayers()){
+            if (player.hasSpecialAbility(PlayerSpecialAbility.ADD_DIE_TO_PLOT_IN_SAME_LOCATION)){
+                numDice += 1;
+                break;
+            }
+        }
 
         // TODO Allow user to choose how many dice to roll (max == numDice)
 
@@ -1020,6 +1060,22 @@ space.
         // Failure (Detection): Num Eagles >= Suspicion
         int numEagles = (int) dieResults.stream().filter(dieResult -> dieResult == DieResult.EAGLE).count();
         int numTargets = (int) dieResults.stream().filter(dieResult -> dieResult == DieResult.TARGET).count();
+
+        // Apply current event modifiers
+        if (model.getGame().getCurrentEventEffect() != null){
+            switch (model.getGame().getCurrentEventEffect()){
+                case IGNORE_1_EAGLE_ON_ALL_PLOT_ATTEMPTS:
+                    numEagles -= 1;
+                    break;
+                case IGNORE_2_EAGLES_ON_ALL_PLOT_EVENTS:
+                    numEagles -= 2;
+                    break;
+                case ADD_1_EAGLE_TO_ALL_PLOT_ATTEMPTS:
+                    numEagles += 1;
+                    break;
+            }
+        }
+
         if (numEagles >= model.getGame().getCurrentPlayer().getSuspicion().getNumEaglesForPlotFailure()) {
             ViewUtil.popupNotify("Plot has been detected!  Player arrested!");
             // Discard plot
@@ -1039,5 +1095,110 @@ space.
             ViewUtil.popupNotify("Hitler has been assassinated!  Players Win!");
             model.getGame().setPhase(Phase.GAMEOVER);
         }
+    }
+
+
+    private void handlePlayerSpecialAbility(PlayerSpecialAbility specialAbility){
+        switch (specialAbility){
+            case ACTION_INCREASE_MOTIVATION_OF_OTHER_CONSPIRATORS_SAME_LOCATION: {
+                Location location = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
+                location.getPlayers().stream().filter(player -> player != model.getGame().getCurrentPlayer()).forEach(player -> {
+                    player.setMotivation(player.getMotivation().raise());
+                });
+                break;
+            }
+            case ACTION_DISCARD_ITEM_TO_LOWER_SUSPICION_OF_ANY_PLAYER: {
+                // Choose Item to discard
+                Item item = (Item) ViewUtil.popupDropdown("Act (Special Ability)", "Choose Item to discard", model.getGame().getCurrentPlayer().getItems().toArray(new Item[0]));
+                model.getGame().getCurrentPlayer().getItems().remove(item);
+                // Choose player to lower suspicion
+                Player player = (Player) ViewUtil.popupDropdown("Act (Special Ability)", "Choose player to reduce suspicion", model.getGame().getPlayers().toArray(new Player[0]));
+                player.setSuspicion(player.getSuspicion().lower());
+                break;
+            }
+            case ACTION_REARRANGE_TOP_THREE_EVENT_CARDS: {
+                // TODO Implement this
+                break;
+            }
+            case ACTION_MOVE_2_SPACES_OR_MOVE_ANOTHER_CONSPIRATOR_1_SPACE: {
+                String move2spaces = "Move 2 locations";
+                String moveAnother = "Move another player 1 location";
+                String choice = (String) ViewUtil.popupDropdown("Special Ability", "Choose Action", new String[]{move2spaces, moveAnother});
+                if (choice.equals(moveAnother)){
+                    Player player = (Player) ViewUtil.popupDropdown("Special Ability", "Move which player?", model.getGame().getPlayers().toArray(new Player[0]));
+                    while (!move(player)){}
+                }
+                else{
+                    while (!move(model.getGame().getCurrentPlayer())){}
+                    view.refresh();
+                    while (!move(model.getGame().getCurrentPlayer())){}
+                }
+                view.refresh();
+                break;
+            }
+            case ACTION_DRAW_2_CARDS_KEEP_ONE_DISCARD_OTHER: {
+                int maxCards = model.getGame().getCurrentPlayer().getDossierMaxSize(model.getGame().getPlayers().size());
+                if (model.getGame().getCurrentPlayer().getDossier().size() == maxCards){
+                    ViewUtil.popupNotify("You cannot take any more cards (hand size limit reached)");
+                    return;
+                }
+                ConspiratorCard card1 = model.getGame().getConspiratorDeck().draw();
+                ConspiratorCard card2 = model.getGame().getConspiratorDeck().draw();
+                ConspiratorCard keep = (ConspiratorCard) ViewUtil.popupDropdown("Draw Card", "Choose a card to keep", new ConspiratorCard[]{card1, card2});
+                model.getGame().getCurrentPlayer().getDossier().add(keep);
+                model.getGame().getConspiratorDeck().discard(keep == card1? card2: card1);
+                break;
+            }
+            case ACTION_PICK_UP_UNREVEALED_ITEM_SAME_LOCATION: {
+                Location location = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
+                if (location.getItem() == null){
+                    ViewUtil.popupNotify("No item to collect");
+                    return;
+                }
+                int maxItems = model.getGame().getCurrentPlayer().getMaxItems(model.getGame().getPlayers().size());
+                if (model.getGame().getCurrentPlayer().getItems().size() == maxItems){
+                    ViewUtil.popupNotify("You can only hold " + maxItems + " items");
+                    return;
+                }
+                Item item = location.getItem();
+                item.setRevealed(true);
+                location.setItem(null);
+                model.getGame().getCurrentPlayer().getItems().add(item);
+                break;
+            }
+            case ACTION_REVEAL_ANY_ITEM_TILE: {
+                List<Location> locations =
+                        model.getGame().getBoard().getLocations().values().stream()
+                                .filter(location -> location.getItem() != null && !location.getItem().isRevealed())
+                                .collect(Collectors.toList());
+                Location location = (Location) ViewUtil.popupDropdown("Reveal Item", "Select location to reveal the item", locations.toArray(new Location[0]));
+                location.getItem().setRevealed(true);
+                break;
+            }
+        }
+    }
+
+
+    private boolean move(Player player){
+        Location myLocation = model.getGame().getBoard().getLocationWith(player);
+        Set<LocationName> connectionNames = model.getGame().getBoard().getConnections(myLocation.getName());
+        LocationName destName = (LocationName) ViewUtil.popupDropdown("Move", "Where do you want to move to?", connectionNames.toArray(new LocationName[0]));
+        Location dest = model.getGame().getBoard().getLocation(destName);
+        if (model.getGame().getStage() >= dest.getMinStage() && model.getGame().getStage() <= dest.getMaxStage()){
+            model.getGame().getBoard().move(player, destName);
+
+            if (dest.getLocationModifier() != null){
+                applyLocationModifier(dest, dest.getLocationModifier());
+            }
+
+            if (model.getGame().getCurrentEventEffect() == CurrentEventEffect.MOVE_TO_NUREMBERG_SET_SUSPICION_TO_LOW){
+                player.setSuspicion(Suspicion.LOW);
+            }
+        }
+        else {
+            ViewUtil.popupNotify("That location is locked");
+            return false;
+        }
+        return true;
     }
 }
