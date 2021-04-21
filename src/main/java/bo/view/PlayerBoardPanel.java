@@ -16,6 +16,11 @@ import java.util.Map;
 
 public class PlayerBoardPanel extends JPanel {
     public static final int PLAYER_BOARD_WIDTH = 605;
+
+    private static final int BORDER_WIDTH = 2;
+    private static final Stroke BORDER_STROKE = new BasicStroke(BORDER_WIDTH);
+    private static final Color BORDER_COLOR = Color.RED;
+
     private static Map<String, BufferedImage> PLAYER_BOARD_IMAGE_MAP = new HashMap<>();
     private static List<Point> SUSPICION_POINTS = new ArrayList<>();
     private static List<Point> MOTIVATION_POINTS = new ArrayList<>();
@@ -43,6 +48,8 @@ public class PlayerBoardPanel extends JPanel {
         SUSPICION_POINTS.add(new Point(325, 220));   // Extreme
     }
 
+    private Model model;
+    private View view;
     private Player player;
     private BufferedImage playerStatusToken;
 
@@ -50,6 +57,8 @@ public class PlayerBoardPanel extends JPanel {
 
     public PlayerBoardPanel(Model model, View view){
         super();
+        this.model = model;
+        this.view = view;
         playerStatusToken = ImageUtil.get("cube-player-status.png", 20);
 
         addMouseMotionListener(new MouseAdapter() {
@@ -77,6 +86,14 @@ public class PlayerBoardPanel extends JPanel {
 
         p = SUSPICION_POINTS.get(player.getSuspicion().ordinal());
         g.drawImage(playerStatusToken, p.x, p.y, null);
+
+        if (model.getGame().getCurrentPlayer() == player){
+            Stroke oldStroke = g.getStroke();
+            g.setColor(BORDER_COLOR);
+            g.setStroke(BORDER_STROKE);
+            g.drawRect(0, 0, getWidth() - BORDER_WIDTH, getHeight() - BORDER_WIDTH);
+            g.setStroke(oldStroke);
+        }
 
         g.setColor(Color.WHITE);
         g.drawString(mx + ", " + my, 20, 20);

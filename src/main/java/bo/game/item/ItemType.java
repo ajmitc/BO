@@ -1,6 +1,7 @@
 package bo.game.item;
 
 public enum ItemType {
+    ANY,
     BADGE,
     EXPLOSIVES,
     INTEL,

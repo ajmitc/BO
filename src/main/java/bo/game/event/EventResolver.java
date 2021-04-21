@@ -1,6 +1,9 @@
-package bo.game;
+package bo.game.event;
 
 import bo.Model;
+import bo.game.Deck;
+import bo.game.NaziMember;
+import bo.game.Phase;
 import bo.game.conspirator.ConspiratorCard;
 import bo.game.conspirator.ConspiratorCardType;
 import bo.game.event.EventCard;
@@ -259,7 +262,8 @@ public class EventResolver {
                     .forEach(player -> player.setSuspicion(player.getSuspicion().lower()));
         });
 
-        // TODO While this is the current event, ignore 2 eagles on all plot attempts
+        // While this is the current event, ignore 2 eagles on all plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.IGNORE_2_EAGLES_ON_ALL_PLOT_EVENTS);
 
         view.refresh();
     }
@@ -416,12 +420,13 @@ public class EventResolver {
     private void handleGestapoRaid(){
         // Conspirators with Extreme suspicion are arrested
         model.getGame().getPlayers().stream().filter(player -> player.getSuspicion() == Suspicion.EXTREME).forEach(player -> {
-            player.setArrested(true);
-            model.getGame().getBoard().move(player, LocationName.JAIL);
+            model.getGame().arrest(player);
         });
         // Conspirators who are NOT arrested may discard any number of cards
         model.getGame().getPlayers().stream().filter(player -> !player.isArrested()).forEach(player -> {
-            // TODO Ask if they want to discard any cards
+            if (ViewUtil.popupConfirm("Gestapo Raid", "Does " + player.getName() + " want to discard cards")){
+                // TODO Ask if they want to discard any cards
+            }
         });
         // Raise each conspirator's suspicion by 1 for each Restricted card they hold
         model.getGame().getPlayers().stream().forEach(player -> {
@@ -476,7 +481,8 @@ public class EventResolver {
     private void handlePartyRallyStage2(){
         model.getGame().resetMilitarySupport();
         Arrays.stream(NaziMember.values()).forEach(naziMember -> model.getGame().getBoard().move(naziMember, LocationName.NUREMBERG));
-        // TODO While this is the current event, all conspirators that pass through Nuremberg set their suspicion to LOW
+        // While this is the current event, all conspirators that pass through Nuremberg set their suspicion to LOW
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.MOVE_TO_NUREMBERG_SET_SUSPICION_TO_LOW);
     }
 
     private void handleSudetenlandOccupation(){
@@ -553,7 +559,8 @@ public class EventResolver {
     private void handleGermanyBombed(){
         model.getGame().adjMilitarySupport(1);
 
-        // TODO While this is the current event, add one eagle to plot attempts
+        // While this is the current event, add one eagle to plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.ADD_1_EAGLE_TO_ALL_PLOT_ATTEMPTS);
     }
 
     private void handleSeaLionPostponed(){
@@ -609,7 +616,8 @@ public class EventResolver {
             hessLocation.getNaziMembers().remove(NaziMember.HESS);
             model.getGame().setHessTokenOnBoard(false);
         }
-        // TODO While this is the current event, ignore one eagle on plot attempts
+        // While this is the current event, ignore one eagle on plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.IGNORE_1_EAGLE_ON_ALL_PLOT_ATTEMPTS);
     }
 
     private void handleVisitFromGoebbelsStage4(){
@@ -679,8 +687,7 @@ public class EventResolver {
                 .filter(player -> player.getSuspicion() == Suspicion.HIGH || player.getSuspicion() == Suspicion.EXTREME)
                 .filter(player -> model.getGame().getBoard().getLocationWith(player).getName() == LocationName.PRAGUE)
                 .forEach(player -> {
-                    player.setArrested(true);
-                    model.getGame().getBoard().move(player, LocationName.JAIL);
+                    model.getGame().arrest(player);
                     ViewUtil.popupNotify(player.getName() + " has been arrested!");
                 });
     }
@@ -689,8 +696,7 @@ public class EventResolver {
         Location destination = moveNaziMemberToClosestConspirator(NaziMember.BORMANN);
 
         if (destination.getPlayers().size() == 1){
-            destination.getPlayers().get(0).setArrested(true);
-            model.getGame().getBoard().move(destination.getPlayers().get(0), LocationName.JAIL);
+            model.getGame().arrest(destination.getPlayers().get(0));
             ViewUtil.popupNotify(destination.getPlayers().get(0).getName() + " has been arrested!");
         }
     }
@@ -709,7 +715,8 @@ public class EventResolver {
         model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.BERGHOF);
         model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.BERGHOF);
 
-        // TODO While this is the current event, ignore 1 eagle on all plot attempts
+        // While this is the current event, ignore 1 eagle on all plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.IGNORE_1_EAGLE_ON_ALL_PLOT_ATTEMPTS);
     }
 
     private void handleRommelDefeated(){
@@ -723,7 +730,8 @@ public class EventResolver {
         model.getGame().getEventCardDeck().getStageDeck(5).draw();
         model.getGame().getEventCardDeck().getStageDeck(5).draw();
 
-        // TODO While this is the current event, add 1 eagle to all plot attempts
+        // While this is the current event, add 1 eagle to all plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.ADD_1_EAGLE_TO_ALL_PLOT_ATTEMPTS);
     }
 
     private void handleVisitToTheFront(){
@@ -733,7 +741,8 @@ public class EventResolver {
         if (model.getGame().getBoard().getLocation(LocationName.SMOLENSK).getItem() != null)
             model.getGame().getBoard().getLocation(LocationName.SMOLENSK).getItem().setRevealed(true);
 
-        // TODO While this is the current event, ignore 2 eagles on all plot attempts
+        // While this is the current event, ignore 2 eagles on all plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.IGNORE_2_EAGLES_ON_ALL_PLOT_EVENTS);
     }
 
     private void handleEasternPush(){
@@ -754,7 +763,8 @@ public class EventResolver {
 
     private void handleVisitFromHitlerStage6(){
         moveNaziMemberToClosestConspirator(NaziMember.HITLER);
-        // TODO While this is the current event, ignore 2 eagles on all plot attempts
+        // While this is the current event, ignore 2 eagles on all plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.IGNORE_2_EAGLES_ON_ALL_PLOT_EVENTS);
     }
 
     private void handleSlowRetreat(){
@@ -773,12 +783,14 @@ public class EventResolver {
     private void handleBerlinBombed(){
         model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
 
-        // TODO While this is the current event, add 1 eagle to all plot attempts
+        // While this is the current event, add 1 eagle to all plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.ADD_1_EAGLE_TO_ALL_PLOT_ATTEMPTS);
     }
 
     private void handleWarsawGhettoUprising(){
-        // TODO While this is the current event, when the dissent track is filled, all conspirators may increase
-        // TODO their motivation by 1 instead of choosing from the normal benefits
+        // While this is the current event, when the dissent track is filled, all conspirators may increase
+        // their motivation by 1 instead of choosing from the normal benefits
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.DISSENT_TRACK_REWARD_ALL_PLAYERS_MAY_INCREASE_MOTIVATION_BY_1);
     }
 
     private void handleStalingradSurrounded(){
@@ -804,7 +816,8 @@ public class EventResolver {
             model.getGame().setMilitarySupport(5);
         model.getGame().getEventCardDeck().getStageDeck(6).draw();
         model.getGame().getEventCardDeck().getStageDeck(6).draw();
-        // TODO While this is the current event, ignore 1 eagle on all plot attempts
+        // While this is the current event, ignore 1 eagle on all plot attempts
+        model.getGame().setCurrentEventEffect(CurrentEventEffect.IGNORE_1_EAGLE_ON_ALL_PLOT_ATTEMPTS);
     }
 
     private void handleKurskRecaptured(){
@@ -852,11 +865,30 @@ public class EventResolver {
     }
 
     private void handleFinalConscription(){
-        // TODO All conspirators may draw up to 2 cards
+        // All conspirators may draw up to 2 cards
+        model.getGame().getPlayers().stream().forEach(player -> {
+            for (int i = 0; i < 2; ++i) {
+                if (ViewUtil.popupConfirm("Final Conscription", "Do you want " + player.getName() + " to draw a card? (2x)")) {
+                    ConspiratorCard card = model.getGame().getConspiratorDeck().draw();
+                    model.getGame().getCurrentPlayer().getDossier().add(card);
+
+                    int maxCards = player.getDossierMaxSize(model.getGame().getPlayers().size());
+                    while (player.getDossier().size() > maxCards) {
+                        ViewUtil.popupNotify(player.getName() + " has too many cards (hand size limit reached)");
+                        ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Hand Limit", "You've exceeded your hand limit.  Choose card to discard.", player.getDossier().toArray(new ConspiratorCard[0]));
+                        player.getDossier().remove(cardToDiscard);
+                        model.getGame().getConspiratorDeck().discard(cardToDiscard);
+                    }
+                }
+                else
+                    break;
+            }
+        });
     }
 
     private void handleAnzioLanding(){
-        // TODO Abwehr cannot use their special abilities for the rest of the game
+        // Abwehr cannot use their special abilities for the rest of the game
+        model.getGame().setAbwehrUseSpecialAbilities(false);
     }
 
 

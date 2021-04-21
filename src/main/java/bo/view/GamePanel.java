@@ -27,15 +27,21 @@ public class GamePanel extends JPanel {
 
     private BoardPanel boardPanel;
     private PlayerBoardsPanel playerBoardsPanel;
+    private ActionPanel actionPanel;
 
     public GamePanel(Model model, View view){
         super(new BorderLayout());
 
         boardPanel        = new BoardPanel(model, view);
         playerBoardsPanel = new PlayerBoardsPanel(model, view);
+        actionPanel       = new ActionPanel(model, view);
+
+        JPanel eastPanel = new JPanel(new BorderLayout());
+        eastPanel.add(playerBoardsPanel, BorderLayout.CENTER);
+        eastPanel.add(actionPanel, BorderLayout.SOUTH);
 
         add(boardPanel, BorderLayout.CENTER);
-        add(playerBoardsPanel, BorderLayout.EAST);
+        add(eastPanel, BorderLayout.EAST);
     }
 
     public void refresh(){
@@ -52,5 +58,9 @@ public class GamePanel extends JPanel {
 
     public PlayerBoardsPanel getPlayerBoardsPanel() {
         return playerBoardsPanel;
+    }
+
+    public ActionPanel getActionPanel() {
+        return actionPanel;
     }
 }
