@@ -1,6 +1,7 @@
 package bo.game.interrogation;
 
 import bo.Model;
+import bo.game.NaziMember;
 import bo.game.conspirator.ConspiratorCard;
 import bo.game.conspirator.ConspiratorCardType;
 import bo.game.location.Location;
@@ -11,6 +12,7 @@ import bo.game.player.Suspicion;
 import bo.view.View;
 import bo.view.util.ViewUtil;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -62,7 +64,7 @@ public class InterrogationEffectResolver {
     }
 
     public void resolveEffect(InterrogationEffect effect){
-        switch (effect){
+        switch (effect) {
             case INCREASE_SUSPICION_BY_1_OF_HIGH_OR_LOWER_SUSPICION_PLAYER: {
                 // Player must choose player to increase suspicion
                 List<Player> candidates =
@@ -89,15 +91,26 @@ public class InterrogationEffectResolver {
                                 .filter(player -> player != model.getGame().getCurrentPlayer() && !player.isArrested() && player.getDossier().size() >= 2)
                                 .collect(Collectors.toList());
                 Player selected = (Player) ViewUtil.popupDropdown("Interrogation", "Choose Player to discard 2 cards", candidates.toArray(new Player[0]));
-                // TODO Implement this
+                ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Interrogation", "Discard a card", selected.getDossier().toArray(new ConspiratorCard[0]));
+                selected.getDossier().remove(card);
+                model.getGame().getConspiratorDeck().discard(card);
+                card = (ConspiratorCard) ViewUtil.popupDropdown("Interrogation", "Discard another card", selected.getDossier().toArray(new ConspiratorCard[0]));
+                selected.getDossier().remove(card);
+                model.getGame().getConspiratorDeck().discard(card);
                 break;
             }
             case INCREASE_MILITARY_SUPPORT_BY_2:
                 model.getGame().adjMilitarySupport(2);
                 break;
-            case MOVE_CLOSEST_DEPUTIES_TO_PLAYERS:
-                // TODO implement this
+            case MOVE_CLOSEST_DEPUTIES_TO_PLAYERS:{
+                Arrays.stream(NaziMember.values()).forEach(naziMember -> {
+                    Location naziLocation = model.getGame().getBoard().getLocationWith(naziMember);
+                    List<Location> playerLocations = model.getGame().getBoard().getLocationsWithConspiratorsClosestTo(naziLocation, true);
+                    if (naziLocation != playerLocations.get(0))
+                        model.getGame().getBoard().move(naziMember, playerLocations.get(0));
+                });
                 break;
+            }
             case INCREASE_ALL_SUSPICION_BY_1_IF_ONE_CONSPIRATOR_IS_AT_HIGH_OR_LOWER_SUSPICION:
                 model.getGame().getPlayers().stream().forEach(player -> {
                     if (!player.isArrested())

@@ -146,6 +146,38 @@ public class Board {
         return returnList;
     }
 
+    /**
+     * Get the closest location that is not locked by stage
+     * @param location
+     * @return
+     */
+    public List<Location> getClosestLegalLocations(Location location, int stage, boolean includeCurrentLocation){
+        List<Location> returnList = new ArrayList<>();
+
+        if (includeCurrentLocation && stage >= location.getMinStage() && stage <= location.getMaxStage()){
+            returnList.add(location);
+        }
+
+        List<Location> unlockedLocations =
+                locations.values().stream()
+                        .filter(loc -> stage >= loc.getMinStage() && stage <= loc.getMaxStage())
+                        .collect(Collectors.toList());
+        int shortestDistance = 99;
+        for (Location unlockedLocation: unlockedLocations){
+            List<Location> path = AStarAlgorithm.findShortestPath(location, unlockedLocation, this);
+            if (path.size() < shortestDistance){
+                returnList.clear();
+                returnList.add(unlockedLocation);
+                shortestDistance = path.size();
+            }
+            else if (path.size() == shortestDistance){
+                returnList.add(unlockedLocation);
+            }
+        }
+
+        return returnList;
+    }
+
     public Map<LocationName, Location> getLocations() {
         return locations;
     }

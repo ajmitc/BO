@@ -21,6 +21,7 @@ import bo.view.util.ViewUtil;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class EventResolver {
     private Model model;
@@ -411,8 +412,14 @@ public class EventResolver {
             if (ViewUtil.popupConfirm("Visit From Hess",
                     "Do you want to decrease " + destination.getPlayers().get(0).getName() + "'s motivation by 1 to move to any legal space and lower suspicion by 1?")){
                 destination.getPlayers().get(0).setMotivation(destination.getPlayers().get(0).getMotivation().lower());
-                // TODO Allow player to move to any legal location
                 destination.getPlayers().get(0).setSuspicion(destination.getPlayers().get(0).getSuspicion().lower());
+                // Allow player to move to any legal location
+                List<Location> legalLocations =
+                        model.getGame().getBoard().getLocations().values().stream()
+                                .filter(location -> model.getGame().getStage() >= location.getMinStage() && model.getGame().getStage() <= location.getMaxStage())
+                                .collect(Collectors.toList());
+                Location selected = (Location) ViewUtil.popupDropdown("Visit From Hess", "Move to any legal location", legalLocations.toArray(new Location[0]));
+                model.getGame().getBoard().move(destination.getPlayers().get(0), selected.getName());
             }
         }
     }
@@ -424,8 +431,11 @@ public class EventResolver {
         });
         // Conspirators who are NOT arrested may discard any number of cards
         model.getGame().getPlayers().stream().filter(player -> !player.isArrested()).forEach(player -> {
-            if (ViewUtil.popupConfirm("Gestapo Raid", "Does " + player.getName() + " want to discard cards")){
-                // TODO Ask if they want to discard any cards
+            while (ViewUtil.popupConfirm("Gestapo Raid", "Does " + player.getName() + " want to discard a card (repeats)")){
+                // Ask if they want to discard any cards
+                ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Gestapo Raid", "Choose card to discard", player.getDossier().toArray(new ConspiratorCard[0]));
+                player.getDossier().remove(card);
+                model.getGame().getConspiratorDeck().discard(card);
             }
         });
         // Raise each conspirator's suspicion by 1 for each Restricted card they hold
@@ -674,7 +684,12 @@ public class EventResolver {
     private void handleCasablancaConference(){
         model.getGame().getPlayers().stream().forEach(player -> {
             player.setMotivation(player.getMotivation().lower());
-            // TODO Player must discard a card
+            // Player must discard a card
+            if (player.getDossier().size() > 0) {
+                ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Casablanca Conference", "Discard a card", player.getDossier().toArray(new ConspiratorCard[0]));
+                player.getDossier().remove(card);
+                model.getGame().getConspiratorDeck().discard(card);
+            }
         });
     }
 
@@ -771,12 +786,17 @@ public class EventResolver {
         model.getGame().getBoard().getLocations().values().stream()
                 .filter(location -> location.getMaxStage() == 6)
                 .forEach(location -> {
-                    location.getPlayers().stream().forEach(player -> {
-                        // TODO Move to nearest legal space
-                    });
-                    location.getNaziMembers().stream().forEach(naziMember -> {
-                        // TODO Move to nearest legal space
-                    });
+                    if (!location.getPlayers().isEmpty() || !location.getNaziMembers().isEmpty()) {
+                        List<Location> closestLegalLocations = model.getGame().getBoard().getClosestLegalLocations(location, model.getGame().getStage(), false);
+                        location.getPlayers().stream().forEach(player -> {
+                            // Move to nearest legal space
+                            model.getGame().getBoard().move(player, closestLegalLocations.get(Util.randInt(closestLegalLocations.size())).getName());
+                        });
+                        location.getNaziMembers().stream().forEach(naziMember -> {
+                            // Move to nearest legal space
+                            model.getGame().getBoard().move(naziMember, closestLegalLocations.get(Util.randInt(closestLegalLocations.size())).getName());
+                        });
+                    }
                 });
     }
 

@@ -19,5 +19,13 @@ public class Util {
         return DIE_VALUES[GEN.nextInt(6) + 1];
     }
 
+    public static int randInt(int min, int max){
+        return min + GEN.nextInt(max - min);
+    }
+
+    public static int randInt(int max){
+        return randInt(0, max);
+    }
+
     private Util(){}
 }
