@@ -155,8 +155,8 @@ Berlin: Spaces in Berlin are designated by a B instead of a stage
 number and are always accessible. All Berlin spaces are treated
 as being connected to one another. In order to enter or leave
 Berlin, you must move through the TRAIN STATION.
-If an effect simply lists “Berlin” (e.g. “choose one conspirator
-in Berlin”), this includes all Berlin spaces. However, it is not
+If an effect simply lists "Berlin" (e.g. "choose one conspirator
+in Berlin"), this includes all Berlin spaces. However, it is not
 considered to be the same space for transfers, plot elements,
 etc. – conspirators must still be in the same space to fulfill
 those conditions.
