@@ -2,10 +2,14 @@ package bo.game.plot;
 
 import bo.game.Game;
 import bo.game.item.Item;
+import bo.game.item.ItemType;
 import bo.game.player.Motivation;
+import bo.game.player.Player;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public abstract class Plot {
     private String id;
@@ -23,8 +27,8 @@ public abstract class Plot {
         return 0;
     }
 
-    public List<Item> getItemsAvailableForExtraDice(Game game){
-        return new ArrayList<>();
+    public Map<ItemType, List<Player>> getItemsAvailableForExtraDice(Game game){
+        return new HashMap<>();
     }
 
     public String getId() {

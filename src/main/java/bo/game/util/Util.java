@@ -16,7 +16,7 @@ public class Util {
     };
 
     public static DieResult roll(){
-        return DIE_VALUES[GEN.nextInt(6) + 1];
+        return DIE_VALUES[GEN.nextInt(6)];
     }
 
     public static int randInt(int min, int max){

@@ -34,4 +34,8 @@ public class ConspiratorCard {
     public ConspiratorCardPlayTiming getTiming() {
         return timing;
     }
+
+    public String toString(){
+        return this.name;
+    }
 }

@@ -219,7 +219,7 @@ public class Board {
     private void connectAll(LocationName ... locationNames){
         for (LocationName locationName: locationNames){
             for (LocationName locationName1: locationNames){
-                if (locationName != locationName1)
+                if (locationName == locationName1)
                     continue;
                 addConnection(locationName, locationName1);
             }

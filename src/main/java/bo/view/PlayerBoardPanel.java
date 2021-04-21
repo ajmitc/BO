@@ -1,8 +1,12 @@
 package bo.view;
 
 import bo.Model;
+import bo.game.conspirator.ConspiratorCard;
+import bo.game.item.Item;
+import bo.game.item.ItemType;
 import bo.game.player.Player;
 import bo.view.util.ImageUtil;
+import bo.view.util.ViewUtil;
 
 import javax.swing.*;
 import java.awt.*;
@@ -20,8 +24,13 @@ public class PlayerBoardPanel extends JPanel {
     private static final int BORDER_WIDTH = 2;
     private static final Stroke BORDER_STROKE = new BasicStroke(BORDER_WIDTH);
     private static final Color BORDER_COLOR = Color.RED;
+    private static final int CARD_WIDTH = 100;
+    private static final int ITEM_WIDTH = 35;
 
     private static Map<String, BufferedImage> PLAYER_BOARD_IMAGE_MAP = new HashMap<>();
+    private static Map<ItemType, BufferedImage> ITEM_TOKEN_MAP = new HashMap<>();
+    private static List<Point> ITEM_POINTS = new ArrayList<>();
+    private static List<Point> CARD_POINTS = new ArrayList<>();
     private static List<Point> SUSPICION_POINTS = new ArrayList<>();
     private static List<Point> MOTIVATION_POINTS = new ArrayList<>();
 
@@ -36,6 +45,20 @@ public class PlayerBoardPanel extends JPanel {
         PLAYER_BOARD_IMAGE_MAP.put(Player.STAUFFENBERG, ImageUtil.get("PlayerBoard-Stauffenberg.jpg", PLAYER_BOARD_WIDTH));
         PLAYER_BOARD_IMAGE_MAP.put(Player.TRESCKOW,     ImageUtil.get("PlayerBoard-Tresckow.jpg", PLAYER_BOARD_WIDTH));
 
+        ITEM_TOKEN_MAP.put(ItemType.BADGE,      ImageUtil.get("token-item-badge.png", ITEM_WIDTH, "player-item-badge"));
+        ITEM_TOKEN_MAP.put(ItemType.EXPLOSIVES, ImageUtil.get("token-item-explosives.png", ITEM_WIDTH, "player-item-exp"));
+        ITEM_TOKEN_MAP.put(ItemType.INTEL,      ImageUtil.get("token-item-intel.png", ITEM_WIDTH, "player-item-intel"));
+        ITEM_TOKEN_MAP.put(ItemType.KEYS,       ImageUtil.get("token-item-keys.png", ITEM_WIDTH, "player-item-keys"));
+        ITEM_TOKEN_MAP.put(ItemType.MAP,        ImageUtil.get("token-item-map.png", ITEM_WIDTH, "player-item-map"));
+        ITEM_TOKEN_MAP.put(ItemType.POISON,     ImageUtil.get("token-item-poison.png", ITEM_WIDTH, "player-item-poison"));
+        ITEM_TOKEN_MAP.put(ItemType.SIGNATURE,  ImageUtil.get("token-item-signature.png", ITEM_WIDTH, "player-item-sign"));
+        ITEM_TOKEN_MAP.put(ItemType.WEAPONS,    ImageUtil.get("token-item-weapons.png", ITEM_WIDTH, "player-item-weapons"));
+
+        ITEM_POINTS.add(new Point(36, 179));
+        ITEM_POINTS.add(new Point(91, 179));
+        ITEM_POINTS.add(new Point(36, 231));
+        ITEM_POINTS.add(new Point(91, 231));
+
         MOTIVATION_POINTS.add(new Point(147, 183));  // Timid
         MOTIVATION_POINTS.add(new Point(147, 163));
         MOTIVATION_POINTS.add(new Point(147, 143));
@@ -46,6 +69,8 @@ public class PlayerBoardPanel extends JPanel {
         SUSPICION_POINTS.add(new Point(232, 220));   // Medium
         SUSPICION_POINTS.add(new Point(280, 220));   // High
         SUSPICION_POINTS.add(new Point(325, 220));   // Extreme
+
+        CARD_POINTS.add(new Point(406, 0));
     }
 
     private Model model;
@@ -86,6 +111,18 @@ public class PlayerBoardPanel extends JPanel {
 
         p = SUSPICION_POINTS.get(player.getSuspicion().ordinal());
         g.drawImage(playerStatusToken, p.x, p.y, null);
+
+        // Draw Items
+        for (int i = 0; i < player.getItems().size(); ++i){
+            Item item = player.getItems().get(i);
+            g.drawImage(ITEM_TOKEN_MAP.get(item.getType()), ITEM_POINTS.get(i).x, ITEM_POINTS.get(i).y, null);
+        }
+
+        // Draw dossier
+        for (int i = 0; i < player.getDossier().size(); ++i){
+            ConspiratorCard card = player.getDossier().get(i);
+            g.drawImage(ImageUtil.get(ViewUtil.getConspiratorCardImageName(card), CARD_WIDTH), CARD_POINTS.get(0).x, CARD_POINTS.get(0).y, null);
+        }
 
         if (model.getGame().getCurrentPlayer() == player){
             Stroke oldStroke = g.getStroke();

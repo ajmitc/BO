@@ -6,11 +6,10 @@ import bo.game.item.Item;
 import bo.game.item.ItemType;
 import bo.game.location.Location;
 import bo.game.player.Motivation;
+import bo.game.player.Player;
 import bo.game.player.PlayerType;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 public class PlotA extends Plot{
 
@@ -42,13 +41,26 @@ public class PlotA extends Plot{
     }
 
     @Override
-    public List<Item> getItemsAvailableForExtraDice(Game game) {
-        List<Item> items = new ArrayList<>();
+    public Map<ItemType, List<Player>> getItemsAvailableForExtraDice(Game game) {
+        Map<ItemType, List<Player>> items = new HashMap<>();
         Optional<Item> itemOptional = game.getCurrentPlayer().getItems().stream().filter(item -> item.getType() == ItemType.WEAPONS).findFirst();
-        if (itemOptional.isPresent())
-            items.add(itemOptional.get());
+        if (itemOptional.isPresent()) {
+            items.put(ItemType.WEAPONS, new ArrayList<>());
+            items.get(ItemType.WEAPONS).add(game.getCurrentPlayer());
+        }
         else {
-            // TODO If any players in same location have weapons, they can be used instead
+            // If any players in same location have weapons, they can be used instead
+            Location location = game.getBoard().getLocationWith(game.getCurrentPlayer());
+            location.getPlayers().stream()
+                    .filter(player -> player != game.getCurrentPlayer())
+                    .forEach(player -> {
+                        Optional<Item> optItem = player.getItems().stream().filter(item -> item.getType() == ItemType.WEAPONS).findFirst();
+                        if (optItem.isPresent()){
+                            if (!items.containsKey(ItemType.WEAPONS))
+                                items.put(ItemType.WEAPONS, new ArrayList<>());
+                            items.get(ItemType.WEAPONS).add(player);
+                        }
+                    });
         }
         return items;
     }

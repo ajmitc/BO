@@ -4,6 +4,7 @@ import bo.Model;
 import bo.game.NaziMember;
 import bo.game.conspirator.ConspiratorCard;
 import bo.game.conspirator.ConspiratorCardType;
+import bo.game.item.Item;
 import bo.game.location.Location;
 import bo.game.location.LocationName;
 import bo.game.player.Motivation;
@@ -141,7 +142,11 @@ public class InterrogationEffectResolver {
                                 .filter(player -> player != model.getGame().getCurrentPlayer() && !player.isArrested() && player.getDossier().size() >= 3)
                                 .collect(Collectors.toList());
                 Player selected = (Player) ViewUtil.popupDropdown("Interrogation", "Choose Player to discard 3 cards", candidates.toArray(new Player[0]));
-                // TODO Implement this
+                for (int i = 0; i < 3; ++i){
+                    ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Interrogation", selected.getName() + " must discard a card (3x)", selected.getDossier().toArray(new ConspiratorCard[0]));
+                    selected.getDossier().remove(card);
+                    model.getGame().getConspiratorDeck().discard(card);
+                }
                 break;
             }
             case RESOLVE_2_EVENT_CARDS: // at end of turn
@@ -162,7 +167,10 @@ public class InterrogationEffectResolver {
                                 .filter(player -> player != model.getGame().getCurrentPlayer() && !player.isArrested() && player.getItems().size() >= 2)
                                 .collect(Collectors.toList());
                 Player selected = (Player) ViewUtil.popupDropdown("Interrogation", "Choose Player to discard 2 items", candidates.toArray(new Player[0]));
-                // TODO Implement this
+                for (int i = 0; i < 2; ++i){
+                    Item item = (Item) ViewUtil.popupDropdown("Interrogation", selected.getName() + " must discard an item (2x)", selected.getItems().toArray(new Item[0]));
+                    selected.getItems().remove(item);
+                }
                 break;
             }
             case CLEAR_DISSENT_TRACK_IF_2_DICE:

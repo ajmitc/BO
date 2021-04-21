@@ -46,6 +46,8 @@ public class GamePanel extends JPanel {
 
     public void refresh(){
         boardPanel.refresh();
+        playerBoardsPanel.refresh();
+        actionPanel.refresh();
     }
 
     public BufferedImage getItemImage(ItemType type){

@@ -34,13 +34,17 @@ public class Game {
     private EventCard currentKeyEventCard;
     private CurrentEventEffect currentEventEffect;
 
-    private int numEventCardsToResolve = 1;
-
-    private boolean hessTokenOnBoard = true;
-
-    private boolean abwehrUseSpecialAbilities = true;
-
     private Map<String, Plot> plots = new HashMap<>();
+
+
+    private int currentPlayerActionsAllowed = 3;
+    private int currentPlayerActionsTaken = 0;
+    private boolean currentPlayerConspireActionTaken = false;
+    private boolean conspireActionDisabled = false;
+    private boolean specialAbilityActionDisabled = false;
+    private boolean abwehrUseSpecialAbilities = true;
+    private boolean hessTokenOnBoard = true;
+    private int numEventCardsToResolve = 1;
 
     public Game(){
         phase = Phase.SETUP;
@@ -264,5 +268,53 @@ public class Game {
 
     public void setCurrentEventEffect(CurrentEventEffect currentEventEffect) {
         this.currentEventEffect = currentEventEffect;
+    }
+
+    public int getCurrentPlayerActionsAllowed() {
+        return currentPlayerActionsAllowed;
+    }
+
+    public void setCurrentPlayerActionsAllowed(int currentPlayerActionsAllowed) {
+        this.currentPlayerActionsAllowed = currentPlayerActionsAllowed;
+    }
+
+    public void adjCurrentPlayerActionsAllowed(int amount){
+        this.currentPlayerActionsAllowed += amount;
+    }
+
+    public int getCurrentPlayerActionsTaken() {
+        return currentPlayerActionsTaken;
+    }
+
+    public void setCurrentPlayerActionsTaken(int currentPlayerActionsTaken) {
+        this.currentPlayerActionsTaken = currentPlayerActionsTaken;
+    }
+
+    public void adjCurrentPlayerActionsTaken(int amount) {
+        this.currentPlayerActionsTaken += amount;
+    }
+
+    public boolean isCurrentPlayerConspireActionTaken() {
+        return currentPlayerConspireActionTaken;
+    }
+
+    public void setCurrentPlayerConspireActionTaken(boolean currentPlayerConspireActionTaken) {
+        this.currentPlayerConspireActionTaken = currentPlayerConspireActionTaken;
+    }
+
+    public boolean isConspireActionDisabled() {
+        return conspireActionDisabled;
+    }
+
+    public void setConspireActionDisabled(boolean conspireActionDisabled) {
+        this.conspireActionDisabled = conspireActionDisabled;
+    }
+
+    public boolean isSpecialAbilityActionDisabled() {
+        return specialAbilityActionDisabled;
+    }
+
+    public void setSpecialAbilityActionDisabled(boolean specialAbilityActionDisabled) {
+        this.specialAbilityActionDisabled = specialAbilityActionDisabled;
     }
 }

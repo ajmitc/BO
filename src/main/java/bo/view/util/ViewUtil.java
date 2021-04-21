@@ -1,7 +1,11 @@
 package bo.view.util;
 
+import bo.game.conspirator.ConspiratorCard;
+import bo.game.event.EventCard;
+
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 
 public class ViewUtil {
     public static final String FONT_NAME = "Serif";
@@ -10,6 +14,10 @@ public class ViewUtil {
 
     public static void popupNotify(String message){
         JOptionPane.showMessageDialog(null, message);
+    }
+
+    public static void popupNotify(String title, BufferedImage bufferedImage){
+        JOptionPane.showMessageDialog(null, null, title, JOptionPane.PLAIN_MESSAGE, new ImageIcon(bufferedImage));
     }
 
     public static boolean popupConfirm(String title, String message){
@@ -28,6 +36,14 @@ public class ViewUtil {
         if (name.equalsIgnoreCase("red"))
             return Color.RED;
         return Color.BLACK;
+    }
+
+    public static String getConspiratorCardImageName(ConspiratorCard card){
+        return "card-conspirator-" + card.getType().name().substring(0, 1).toUpperCase() + card.getType().name().substring(1).toLowerCase() + "-_" + card.getId() + "_" + card.getName() + ".jpg";
+    }
+
+    public static String getEventCardImageName(EventCard eventCard){
+        return "Event-_" + eventCard.getId() + "_" + eventCard.getStage() + ".jpg";
     }
 
     private ViewUtil(){}
