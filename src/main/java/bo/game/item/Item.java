@@ -4,6 +4,10 @@ public class Item {
     private ItemType type;
     private boolean revealed = false;
 
+    // Used with Concealed Pistol conspirator card
+    // Is a Weapon type, but doesn't take up item slot
+    private boolean concealed = false;
+
     public Item(ItemType type){
         this.type = type;
     }
@@ -18,6 +22,14 @@ public class Item {
 
     public void setRevealed(boolean revealed) {
         this.revealed = revealed;
+    }
+
+    public boolean isConcealed() {
+        return concealed;
+    }
+
+    public void setConcealed(boolean concealed) {
+        this.concealed = concealed;
     }
 
     public String toString(){

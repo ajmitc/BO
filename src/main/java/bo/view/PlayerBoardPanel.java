@@ -2,6 +2,7 @@ package bo.view;
 
 import bo.Model;
 import bo.game.conspirator.ConspiratorCard;
+import bo.game.conspirator.ConspiratorCardType;
 import bo.game.item.Item;
 import bo.game.item.ItemType;
 import bo.game.player.Player;
@@ -30,7 +31,7 @@ public class PlayerBoardPanel extends JPanel {
     private static Map<String, BufferedImage> PLAYER_BOARD_IMAGE_MAP = new HashMap<>();
     private static Map<ItemType, BufferedImage> ITEM_TOKEN_MAP = new HashMap<>();
     private static List<Point> ITEM_POINTS = new ArrayList<>();
-    private static List<Point> CARD_POINTS = new ArrayList<>();
+    private static Point CARD_POINT = new Point(406, 0);
     private static List<Point> SUSPICION_POINTS = new ArrayList<>();
     private static List<Point> MOTIVATION_POINTS = new ArrayList<>();
 
@@ -69,8 +70,6 @@ public class PlayerBoardPanel extends JPanel {
         SUSPICION_POINTS.add(new Point(232, 220));   // Medium
         SUSPICION_POINTS.add(new Point(280, 220));   // High
         SUSPICION_POINTS.add(new Point(325, 220));   // Extreme
-
-        CARD_POINTS.add(new Point(406, 0));
     }
 
     private Model model;
@@ -79,6 +78,10 @@ public class PlayerBoardPanel extends JPanel {
     private BufferedImage playerStatusToken;
 
     private int mx, my;
+
+    // Number of columns to draw cards
+    private int numCols = 2;
+    private int cardHeight = 0;
 
     public PlayerBoardPanel(Model model, View view){
         super();
@@ -93,6 +96,32 @@ public class PlayerBoardPanel extends JPanel {
                 mx = e.getX();
                 my = e.getY();
                 refresh();
+            }
+        });
+
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                super.mousePressed(e);
+                if (e.getButton() == MouseEvent.BUTTON3){
+                    ConspiratorCard card = getConspiratorCardAt(e.getX(), e.getY());
+                    if (card != null){
+                        if (card.getType() == ConspiratorCardType.PLOT)
+                            view.getGamePanel().getBoardPanel().setCenterScreenImage(ImageUtil.rotateImageByDegrees(ImageUtil.get(ViewUtil.getConspiratorCardImageName(card)), 90));
+                        else
+                            view.getGamePanel().getBoardPanel().setCenterScreenImage(ImageUtil.get(ViewUtil.getConspiratorCardImageName(card)));
+                        view.refresh();
+                    }
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                super.mouseReleased(e);
+                if (e.getButton() == MouseEvent.BUTTON3){
+                    view.getGamePanel().getBoardPanel().setCenterScreenImage(null);
+                    view.refresh();
+                }
             }
         });
     }
@@ -121,7 +150,11 @@ public class PlayerBoardPanel extends JPanel {
         // Draw dossier
         for (int i = 0; i < player.getDossier().size(); ++i){
             ConspiratorCard card = player.getDossier().get(i);
-            g.drawImage(ImageUtil.get(ViewUtil.getConspiratorCardImageName(card), CARD_WIDTH), CARD_POINTS.get(0).x, CARD_POINTS.get(0).y, null);
+            int row = i / numCols;
+            int col = i % numCols;
+            BufferedImage cardImageSmall = ImageUtil.get(ViewUtil.getConspiratorCardImageName(card), CARD_WIDTH, "cc-" + card.getId() + "-small");
+            g.drawImage(cardImageSmall, CARD_POINT.x + (col * CARD_WIDTH), CARD_POINT.y + (row * cardImageSmall.getHeight()), null);
+            cardHeight = cardImageSmall.getHeight();
         }
 
         if (model.getGame().getCurrentPlayer() == player){
@@ -146,5 +179,16 @@ public class PlayerBoardPanel extends JPanel {
 
     public void setPlayer(Player player) {
         this.player = player;
+    }
+
+    public ConspiratorCard getConspiratorCardAt(int mx, int my){
+        if (cardHeight > 0 && mx >= CARD_POINT.x) {
+            int row = (my - CARD_POINT.y) / cardHeight;
+            int col = (mx - CARD_POINT.x) / CARD_WIDTH;
+            int index = (row * numCols) + col;
+            if (index >= 0 && index < player.getDossier().size())
+                return player.getDossier().get(index);
+        }
+        return null;
     }
 }

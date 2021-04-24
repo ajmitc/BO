@@ -20,6 +20,9 @@ public class EventCardDeck {
         stageDecks.put(6, new Deck<>());
         stageDecks.put(7, new Deck<>());
 
+        for (Deck deck: stageDecks.values())
+            deck.setShuffleDiscardIfDeckEmpty(false);
+
         // Build the decks
         // Stage 1
         stageDecks.get(1).add(new EventCard(EventCardType.NORMAL, "Parade In Berlin", 1, "0000", EventCardEffect.PARADE_IN_BERLIN));

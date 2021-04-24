@@ -115,12 +115,28 @@ public class Player {
         this.motivation = motivation;
     }
 
+    public void raiseMotivation(){
+        setMotivation(getMotivation().raise());
+    }
+
+    public void lowerMotivation(){
+        setMotivation(getMotivation().lower());
+    }
+
     public Suspicion getSuspicion() {
         return suspicion;
     }
 
     public void setSuspicion(Suspicion suspicion) {
         this.suspicion = suspicion;
+    }
+
+    public void raiseSuspicion(){
+        setSuspicion(getSuspicion().raise());
+    }
+
+    public void lowerSuspicion(){
+        setSuspicion(getSuspicion().lower());
     }
 
     public List<ConspiratorCard> getDossier() {
@@ -141,5 +157,9 @@ public class Player {
 
     public boolean hasSpecialAbility(PlayerSpecialAbility specialAbility){
         return specialAbilities.contains(specialAbility);
+    }
+
+    public String toString(){
+        return name;
     }
 }

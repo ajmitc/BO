@@ -26,8 +26,16 @@ public class Deck<T> {
         cards.add(card);
     }
 
+    public void addToTop(T card){
+        cards.add(0, card);
+    }
+
     public void discard(T card){
         discardPile.add(card);
+    }
+
+    public void discardAll(List<T> cards){
+        discardPile.addAll(cards);
     }
 
     public void shuffleDiscardIntoDeck(){
@@ -54,5 +62,9 @@ public class Deck<T> {
 
     public boolean isShuffleDiscardIfDeckEmpty() {
         return shuffleDiscardIfDeckEmpty;
+    }
+
+    public List<T> getDiscardPile() {
+        return discardPile;
     }
 }

@@ -20,4 +20,8 @@ public enum Motivation {
         int ord = this.ordinal() + 1;
         return Motivation.values()[ord];
     }
+
+    public boolean atOrAbove(Motivation other){
+        return ordinal() >= other.ordinal();
+    }
 }

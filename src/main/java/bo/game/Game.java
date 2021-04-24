@@ -1,5 +1,6 @@
 package bo.game;
 
+import bo.game.conspirator.ConspiratorCard;
 import bo.game.conspirator.ConspiratorCardType;
 import bo.game.conspirator.ConspiratorDeck;
 import bo.game.event.CurrentEventEffect;
@@ -7,6 +8,7 @@ import bo.game.event.EventCard;
 import bo.game.event.EventCardDeck;
 import bo.game.interrogation.InterrogationDeck;
 import bo.game.item.Item;
+import bo.game.item.ItemDeck;
 import bo.game.item.ItemType;
 import bo.game.location.Board;
 import bo.game.location.LocationName;
@@ -17,6 +19,8 @@ import bo.game.plot.PlotA;
 import java.util.*;
 
 public class Game {
+    public static final int MAX_DICE = 10;
+
     private Phase phase;
     private PhaseStep phaseStep;
     private Difficulty difficulty;
@@ -27,14 +31,21 @@ public class Game {
     private ConspiratorDeck conspiratorDeck;
     private EventCardDeck eventCardDeck;
     private InterrogationDeck interrogationDeck;
+    private ItemDeck itemDeck;
     private int stage = 1;
+
+    // Dice allocations
     private int dissentTrackDice = 0;
+    private int defectionsAndDissentDice = 0;
 
     private EventCard currentEventCard;
     private EventCard currentKeyEventCard;
     private CurrentEventEffect currentEventEffect;
 
     private Map<String, Plot> plots = new HashMap<>();
+
+    // Bonus actions awarded to players (ie. Black Orchestra card)
+    private Map<Player, Integer> bonusActions = new HashMap<>();
 
 
     private int currentPlayerActionsAllowed = 3;
@@ -56,6 +67,7 @@ public class Game {
         conspiratorDeck = new ConspiratorDeck();
         eventCardDeck = new EventCardDeck();
         interrogationDeck = new InterrogationDeck();
+        itemDeck = new ItemDeck();
 
         // Create items and distribute to locations
         List<Item> items = new ArrayList<>();
@@ -112,6 +124,27 @@ public class Game {
         player.getDossier().stream().filter(card -> card.getType() == ConspiratorCardType.RESTRICTED).forEach(card -> conspiratorDeck.discard(card));
         player.getDossier().removeIf(card -> card.getType() == ConspiratorCardType.RESTRICTED);
         // TODO For each RESTRICTED card discarded, discard a non-RESTRICTED card
+    }
+
+    public List<NaziMember> getDeputiesInPlay(){
+        List<NaziMember> deputies = new ArrayList<>();
+        board.getLocations().values().stream().forEach(location -> {
+            for (NaziMember naziMember: location.getNaziMembers()){
+                if (naziMember != NaziMember.HITLER && !deputies.contains(naziMember)){
+                    deputies.add(naziMember);
+                }
+            }
+        });
+        return deputies;
+    }
+
+    /**
+     * Return the number of dice available in the pool
+     *
+     * @return MAX_DICE - dissent-track-dice - defections&dissent-dice
+     */
+    public int getNumDiceAvailable(){
+        return MAX_DICE - dissentTrackDice - defectionsAndDissentDice;
     }
 
     public Phase getPhase() {
@@ -194,6 +227,10 @@ public class Game {
         return interrogationDeck;
     }
 
+    public ItemDeck getItemDeck() {
+        return itemDeck;
+    }
+
     public Board getBoard() {
         return board;
     }
@@ -232,6 +269,18 @@ public class Game {
 
     public void adjDissentTrackDice(int amount) {
         this.dissentTrackDice += amount;
+    }
+
+    public int getDefectionsAndDissentDice() {
+        return defectionsAndDissentDice;
+    }
+
+    public void setDefectionsAndDissentDice(int defectionsAndDissentDice) {
+        this.defectionsAndDissentDice = defectionsAndDissentDice;
+    }
+
+    public void adjDefectionsAndDissentDice(int amount){
+        this.defectionsAndDissentDice += amount;
     }
 
     public boolean isHessTokenOnBoard() {
@@ -316,5 +365,9 @@ public class Game {
 
     public void setSpecialAbilityActionDisabled(boolean specialAbilityActionDisabled) {
         this.specialAbilityActionDisabled = specialAbilityActionDisabled;
+    }
+
+    public Map<Player, Integer> getBonusActions() {
+        return bonusActions;
     }
 }

@@ -147,6 +147,18 @@ public class Board {
     }
 
     /**
+     * Get all locations that are not locked by stage
+     * @return
+     */
+    public List<Location> getLegalLocations(int stage){
+        List<Location> unlockedLocations =
+                locations.values().stream()
+                        .filter(loc -> stage >= loc.getMinStage() && stage <= loc.getMaxStage())
+                        .collect(Collectors.toList());
+        return unlockedLocations;
+    }
+
+    /**
      * Get the closest location that is not locked by stage
      * @param location
      * @return

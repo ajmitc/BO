@@ -26,10 +26,15 @@ import bo.view.util.ViewUtil;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.*;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-public class Controller {
+public class Controller implements CommonController{
+    private static Logger logger = Logger.getLogger(Controller.class.getName());
+
     private Model model;
     private View view;
 
@@ -41,7 +46,7 @@ public class Controller {
         this.model = model;
         this.view = view;
         this.eventResolver = new EventResolver(model, view);
-        this.conspiratorEffectResolver = new ConspiratorEffectResolver(model, view);
+        this.conspiratorEffectResolver = new ConspiratorEffectResolver(model, view, this);
         this.interrogationEffectResolver = new InterrogationEffectResolver(model, view);
 
         view.getMainMenuPanel().getBtnNewGame().addActionListener(new AbstractAction() {
@@ -71,6 +76,7 @@ public class Controller {
                 run();
             }
         });
+
 
         /*
 CONSPIRE
@@ -122,6 +128,24 @@ Roll all of those dice and resolve the results in this order:
                         return 0;
                     }
                 });
+
+                logger.info("Die Results:");
+                for (DieResult dieResult: dieResults){
+                    logger.info(dieResult.name());
+                }
+
+                Optional<Player> playerWithClassifiedPapersOptional =
+                        model.getGame().getPlayers().stream()
+                                .filter(player -> player.getDossier().stream().anyMatch(card -> card.getEffect() == ConspiratorCardEffect.CLASSIFIED_PAPERS))
+                                .findFirst();
+                Player playerWithClassifiedPapers = playerWithClassifiedPapersOptional.isPresent()? playerWithClassifiedPapersOptional.get(): null;
+
+                Optional<Player> playerWithDefectionsAndDissentOptional =
+                        model.getGame().getPlayers().stream()
+                                .filter(player -> player.getDossier().stream().anyMatch(card -> card.getEffect() == ConspiratorCardEffect.DEFECTIONS_AND_DISSENT))
+                                .findFirst();
+                Player playerWithDefectionsAndDissent = playerWithDefectionsAndDissentOptional.isPresent()? playerWithDefectionsAndDissentOptional.get(): null;
+
                 for (DieResult dieResult: dieResults){
                     switch (dieResult){
                         case EAGLE:{
@@ -130,25 +154,51 @@ Roll all of those dice and resolve the results in this order:
                             model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer()).getPlayers().stream().forEach(player -> {
                                 player.setSuspicion(player.getSuspicion().raise());
                             });
+
                             // If a player has Defections And Dissent Conspirator Card, it is discarded
-                            model.getGame().getPlayers().stream().forEach(player -> {
-                                Optional<ConspiratorCard> optCard = player.getDossier().stream().filter(card -> card.getEffect() == ConspiratorCardEffect.DEFECTIONS_AND_DISSENT).findFirst();
-                                if (optCard.isPresent()) {
-                                    player.getDossier().remove(optCard.get());
-                                    model.getGame().getConspiratorDeck().discard(optCard.get());
-                                }
-                            });
+                            if (playerWithDefectionsAndDissent != null){
+                                ConspiratorCard ddCard = playerWithDefectionsAndDissent.getDossier().stream().filter(card -> card.getEffect() == ConspiratorCardEffect.DEFECTIONS_AND_DISSENT).findFirst().get();
+                                playerWithDefectionsAndDissent.getDossier().remove(ddCard);
+                                model.getGame().getConspiratorDeck().discard(ddCard);
+                                model.getGame().setDefectionsAndDissentDice(0);
+                                ViewUtil.popupNotify("Eagle die result caused " + playerWithDefectionsAndDissent.getName() + " to discard Defections and Dissent card");
+
+                            }
+
+                            // If a player has Classified Papers, it is discarded
+                            if (playerWithClassifiedPapers != null){
+                                playerWithClassifiedPapers.raiseSuspicion();
+                                ConspiratorCard classifiedPapers = playerWithClassifiedPapers.getDossier().stream().filter(card -> card.getEffect() == ConspiratorCardEffect.CLASSIFIED_PAPERS).findFirst().get();
+                                playerWithClassifiedPapers.getDossier().remove(classifiedPapers);
+                                playerWithClassifiedPapers = null;
+                                ViewUtil.popupNotify("Eagle die result caused " + playerWithClassifiedPapers.getName() + " to discard Classified Papers card");
+                            }
                             break;
                         }
                         case TARGET:{
-                            // Place on dissent track, gain bonus if full
-                            ViewUtil.popupNotify("Adding die to dissent track");
-                            model.getGame().adjDissentTrackDice(1);
-                            if (model.getGame().getDissentTrackDice() >= 3){
-                                handleFullDissentTrack();
+                            // If a player has Defections and Dissent Conspirator card, put Target on that card instead of the dissent track
+                            // If two or more dice on this card, decrease Military Support by 1 and return dice to the supply
+                            if (playerWithDefectionsAndDissent != null){
+                                ViewUtil.popupNotify("Adding target die to Defections & Dissent card");
+                                model.getGame().adjDefectionsAndDissentDice(1);
+                                if (model.getGame().getDefectionsAndDissentDice() >= 2){
+                                    model.getGame().adjMilitarySupport(-1);
+                                    model.getGame().adjDefectionsAndDissentDice(-2);
+                                }
                             }
-                            // TODO If a player has Defections and Dissent Conspirator card, ask if they want to put this Target die on it
-                            // TODO If two or more dice on this card, decrease Military Support by 1 and return dice to the display
+                            else {
+                                // Place on dissent track, gain bonus if full
+                                ViewUtil.popupNotify("Adding target die to dissent track");
+                                model.getGame().adjDissentTrackDice(1);
+                                if (model.getGame().getDissentTrackDice() >= 3) {
+                                    handleFullDissentTrack();
+                                }
+                            }
+
+                            if (playerWithClassifiedPapers != null){
+                                playerWithClassifiedPapers.lowerSuspicion();
+                            }
+
                             break;
                         }
                         default:{
@@ -204,16 +254,36 @@ game effect and may be moved into or out of freely.
         view.getGamePanel().getActionPanel().getBtnPlayCard().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Act (Play Card)", "Choose a card to play", model.getGame().getCurrentPlayer().getDossier().toArray(new ConspiratorCard[0]));
+                boolean useAction = true;
+                ConspiratorCard card =
+                        (ConspiratorCard) ViewUtil.popupDropdown(
+                                "Act (Play Card)",
+                                "Choose a card to play",
+                                model.getGame().getCurrentPlayer().getDossier().stream()
+                                        .filter(card1 -> card1.getTiming() == ConspiratorCardPlayTiming.ACTION)
+                                        .collect(Collectors.toList())
+                                        .toArray(new ConspiratorCard[0]));
                 if (card.getType() == ConspiratorCardType.PLOT){
                     attemptPlot(card);
                 }
                 else {
-                    conspiratorEffectResolver.resolveEffect(card.getEffect());
+                    ConspiratorEffectResolution resolution = conspiratorEffectResolver.resolveEffect(card);
+                    if (resolution == ConspiratorEffectResolution.CANCELLED){
+                        return;
+                    }
+
                     // Discard played card when finished
-                    model.getGame().getConspiratorDeck().discard(card);
+                    if (resolution != ConspiratorEffectResolution.DONE_NO_DISCARD) {
+                        model.getGame().getCurrentPlayer().getDossier().remove(card);
+                        model.getGame().getConspiratorDeck().discard(card);
+                    }
+
+                    // Check if card should have used an action
+                    if (card.getTiming() == ConspiratorCardPlayTiming.ANY_TURN_NOT_AN_ACTION || card.getTiming() == ConspiratorCardPlayTiming.INITIATING_PLOT_NOT_AN_ACTION)
+                        useAction = false;
                 }
-                model.getGame().adjCurrentPlayerActionsTaken(1);
+                if (useAction)
+                    model.getGame().adjCurrentPlayerActionsTaken(1);
                 run();
             }
         });
@@ -229,7 +299,7 @@ game effect and may be moved into or out of freely.
                                 .collect(Collectors.toList());
                 // TODO Maybe open separate dialog with card choices
                 ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Act (Play Card)", "Choose a card to play", cards.toArray(new ConspiratorCard[0]));
-                conspiratorEffectResolver.resolveEffect(card.getEffect());
+                conspiratorEffectResolver.resolveEffect(card);
                 // Discard played card when finished
                 model.getGame().getConspiratorDeck().discard(card);
                 model.getGame().adjCurrentPlayerActionsTaken(1);
@@ -257,21 +327,7 @@ conspirator deck.
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 Player player = model.getGame().getCurrentPlayer();
-                if (player.hasSpecialAbility(PlayerSpecialAbility.ACTION_DRAW_2_CARDS_KEEP_ONE_DISCARD_OTHER)){
-                    handlePlayerSpecialAbility(PlayerSpecialAbility.ACTION_DRAW_2_CARDS_KEEP_ONE_DISCARD_OTHER);
-                }
-                else {
-                    ConspiratorCard card = model.getGame().getConspiratorDeck().draw();
-                    player.getDossier().add(card);
-                }
-
-                int maxCards = player.getDossierMaxSize(model.getGame().getPlayers().size());
-                while (player.getDossier().size() > maxCards) {
-                    ViewUtil.popupNotify(player.getName() + " has too many cards (hand size limit reached)");
-                    ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Hand Limit", "You've exceeded your hand limit.  Choose card to discard.", player.getDossier().toArray(new ConspiratorCard[0]));
-                    player.getDossier().remove(cardToDiscard);
-                    model.getGame().getConspiratorDeck().discard(cardToDiscard);
-                }
+                drawConspiratorCard(player);
                 model.getGame().adjCurrentPlayerActionsTaken(1);
                 run();
             }
@@ -312,13 +368,12 @@ an event card.
                         ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to give", currentPlayer.getDossier().toArray(new ConspiratorCard[0]));
                         other.getDossier().add(card);
                         currentPlayer.getDossier().remove(card);
-
-                        if (other.getDossier().size() > other.getDossierMaxSize(model.getGame().getPlayers().size())){
-                            ViewUtil.popupNotify(other.getName() + " has too many cards now, select 1 card to discard");
-                            ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to discard", other.getDossier().toArray(new ConspiratorCard[0]));
-                            other.getDossier().remove(cardToDiscard);
-                            model.getGame().getConspiratorDeck().discard(cardToDiscard);
+                        if (card.getEffect() == ConspiratorCardEffect.CONCEALED_PISTOL){
+                            Item concealedPistol = currentPlayer.getItems().stream().filter(item -> item.isConcealed()).findFirst().get();
+                            currentPlayer.getItems().remove(concealedPistol);
+                            other.getItems().add(concealedPistol);
                         }
+                        checkDossierSize(other);
                     }
                     else {
                         if (other.getDossier().isEmpty()){
@@ -328,13 +383,12 @@ an event card.
                         ConspiratorCard card = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to give", other.getDossier().toArray(new ConspiratorCard[0]));
                         currentPlayer.getDossier().add(card);
                         other.getDossier().remove(card);
-
-                        if (currentPlayer.getDossier().size() > currentPlayer.getDossierMaxSize(model.getGame().getPlayers().size())){
-                            ViewUtil.popupNotify(currentPlayer.getName() + " has too many cards now, select 1 card to discard");
-                            ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Transfer", "Select card to discard", currentPlayer.getDossier().toArray(new ConspiratorCard[0]));
-                            currentPlayer.getDossier().remove(cardToDiscard);
-                            model.getGame().getConspiratorDeck().discard(cardToDiscard);
+                        if (card.getEffect() == ConspiratorCardEffect.CONCEALED_PISTOL){
+                            Item concealedPistol = other.getItems().stream().filter(item -> item.isConcealed()).findFirst().get();
+                            other.getItems().remove(concealedPistol);
+                            currentPlayer.getItems().add(concealedPistol);
                         }
+                        checkDossierSize(currentPlayer);
                     }
                 }
                 else {
@@ -343,30 +397,20 @@ an event card.
                             ViewUtil.popupNotify("You don't have any items to give");
                             return;
                         }
-                        Item item = (Item) ViewUtil.popupDropdown("Transfer", "Select item to give", currentPlayer.getItems().toArray(new Item[0]));
+                        Item item = (Item) ViewUtil.popupDropdown("Transfer", "Select item to give", currentPlayer.getItems().stream().filter(item1 -> !item1.isConcealed()).collect(Collectors.toList()).toArray(new Item[0]));
                         other.getItems().add(item);
                         currentPlayer.getItems().remove(item);
-
-                        if (other.getItems().size() > other.getMaxItems(model.getGame().getPlayers().size())){
-                            ViewUtil.popupNotify(other.getName() + " has too many items now, select 1 item to discard");
-                            Item itemToDiscard = (Item) ViewUtil.popupDropdown("Transfer", "Select item to discard", other.getItems().toArray(new Item[0]));
-                            other.getItems().remove(itemToDiscard);
-                        }
+                        checkNumItems(other);
                     }
                     else {
                         if (other.getItems().isEmpty()){
                             ViewUtil.popupNotify(other.getName() + " doesn't have any items to give");
                             return;
                         }
-                        Item item = (Item) ViewUtil.popupDropdown("Transfer", "Select item to give", other.getItems().toArray(new Item[0]));
+                        Item item = (Item) ViewUtil.popupDropdown("Transfer", "Select item to give", other.getItems().stream().filter(item1 -> !item1.isConcealed()).collect(Collectors.toList()).toArray(new Item[0]));
                         currentPlayer.getItems().add(item);
                         other.getItems().remove(item);
-
-                        if (currentPlayer.getItems().size() > currentPlayer.getMaxItems(model.getGame().getPlayers().size())){
-                            ViewUtil.popupNotify(currentPlayer.getName() + " has too many items now, select 1 item to discard");
-                            Item itemToDiscard = (Item) ViewUtil.popupDropdown("Transfer", "Select item to discard", currentPlayer.getItems().toArray(new Item[0]));
-                            currentPlayer.getItems().remove(itemToDiscard);
-                        }
+                        checkNumItems(currentPlayer);
                     }
                 }
                 model.getGame().adjCurrentPlayerActionsTaken(1);
@@ -511,7 +555,7 @@ moves to GESTAPO HQ at high suspicion.
                     return;
                 }
 
-                if (player.getMotivation().ordinal() < Motivation.MOTIVATED.ordinal()){
+                if (!player.getMotivation().atOrAbove(Motivation.MOTIVATED)){
                     ViewUtil.popupNotify("You must have motivation at MOTIVATED or above");
                     return;
                 }
@@ -576,8 +620,13 @@ moves to GESTAPO HQ at high suspicion.
                     switch (model.getGame().getPhaseStep()){
                         case START_PHASE: {
                             model.getGame().setCurrentPlayerActionsAllowed(3);
-                            if (model.getGame().getCurrentPlayer().hasSpecialAbility(PlayerSpecialAbility.TAKE_4_ACTIONS))
+                            // Apply special ability
+                            if (model.getGame().getCurrentPlayer().hasSpecialAbility(PlayerSpecialAbility.TAKE_4_ACTIONS) &&
+                                    model.getGame().getCurrentPlayer().getMotivation().ordinal() >= Motivation.MOTIVATED.ordinal())
                                 model.getGame().setCurrentPlayerActionsAllowed(4);
+                            // Add any bonus actions (ie. Black Orchestra card)
+                            model.getGame().adjCurrentPlayerActionsAllowed(model.getGame().getBonusActions().getOrDefault(model.getGame().getCurrentPlayer(), 0));
+                            // Reset action taken count
                             model.getGame().setCurrentPlayerActionsTaken(0);
                             model.getGame().setCurrentPlayerConspireActionTaken(false);
                             model.getGame().setPhaseStep(PhaseStep.TAKE_ACTIONS_CHOOSE_ACTION);
@@ -741,6 +790,31 @@ an event card.
                             break;
                         }
                         case PRISON_DRAW_INTERROGATION_CARD: {
+                            // Check if player has False Accusations Conspirator Card in Dossier
+                            // If so, ask if they want to play it
+                            Optional<ConspiratorCard> falseAccusationsCard = model.getGame().getCurrentPlayer().getDossier().stream().filter(card -> card.getEffect() == ConspiratorCardEffect.FALSE_ACCUSATIONS).findFirst();
+                            if (falseAccusationsCard.isPresent()){
+                                if (ViewUtil.popupConfirm("Interrogation", "Do you want to play your False Accusations card?")){
+                                    // lower one other conspirator's suspicion by 1
+                                    Player selected =
+                                            (Player) ViewUtil.popupDropdown(
+                                                    "False Accusations",
+                                                    "Choose another conspirator to lower suspicion by 1",
+                                                    model.getGame().getPlayers().stream()
+                                                            .filter(player -> player != model.getGame().getCurrentPlayer())
+                                                            .collect(Collectors.toList()).toArray(new Player[0]));
+                                    selected.lowerSuspicion();
+                                    // remove one deputy from game
+                                    NaziMember naziMember = (NaziMember)
+                                            ViewUtil.popupDropdown("False Accusations",
+                                                    "Choose a Deputy to remove from game",
+                                                    model.getGame().getDeputiesInPlay().toArray(new NaziMember[0]));
+                                    Location location = model.getGame().getBoard().getLocationWith(naziMember);
+                                    location.getNaziMembers().remove(naziMember);
+                                    ViewUtil.popupNotify(naziMember.getName() + " has been removed from the game");
+                                }
+                            }
+
                             // Draw an interrogation card (if no option can be applied in-full, choose another card) and choose one option
                             InterrogationCard interrogationCard = model.getGame().getInterrogationDeck().drawFullyApplicable(interrogationEffectResolver);
 
@@ -1014,7 +1088,7 @@ space.
      * - Raise all player's motivation by 1 (if current event in play)
      * Remove 3 dice from dissent track
      */
-    private void handleFullDissentTrack(){
+    public void handleFullDissentTrack(){
         if (model.getGame().getDissentTrackDice() < 3){
             return;
         }
@@ -1054,7 +1128,7 @@ space.
         Player player = model.getGame().getCurrentPlayer();
         Location location = model.getGame().getBoard().getLocationWith(player);
         if (location.getItem() != null){
-            ViewUtil.popupNotify("You must remove the Item before you can deliver items here");
+            ViewUtil.popupNotify("You must collect the Item before you can deliver items here");
             return;
         }
         if (player.getItems().isEmpty()){
@@ -1075,6 +1149,11 @@ space.
             selectedItem = optional.get();
         }
         player.getItems().remove(selectedItem);
+        if (selectedItem.isConcealed()){
+            ConspiratorCard concealedPistolCard = player.getDossier().stream().filter(card -> card.getEffect() == ConspiratorCardEffect.CONCEALED_PISTOL).findFirst().get();
+            player.getDossier().remove(concealedPistolCard);
+            model.getGame().getConspiratorDeck().discard(concealedPistolCard);
+        }
         applyLocationModifier(location, location.getDeliveryModifier());
         model.getGame().adjCurrentPlayerActionsTaken(1);
     }
@@ -1159,7 +1238,31 @@ space.
             }
         }
 
-        // TODO Add dice granted by conspirator cards
+        // Add dice granted by conspirator cards
+        if (model.getGame().getMilitarySupport() >= 5) {
+            Optional<Player> playerWithPartisanInformant =
+                    model.getGame().getPlayers().stream()
+                            .filter(player -> player.getDossier().stream().anyMatch(card1 -> card1.getEffect() == ConspiratorCardEffect.PARTISAN_INFORMANT))
+                            .findAny();
+            if (playerWithPartisanInformant.isPresent()) {
+                if (ViewUtil.popupConfirm("Plot Attempt", "Do you want to play Partisan Informant to add 1 die to plot attempt?")){
+                    ConspiratorCard partisanInformant = playerWithPartisanInformant.get().getDossier().stream().filter(card1 -> card1.getEffect() == ConspiratorCardEffect.PARTISAN_INFORMANT).findAny().get();
+                    playerWithPartisanInformant.get().getDossier().remove(partisanInformant);
+                    model.getGame().getConspiratorDeck().discard(partisanInformant);
+                    numDice += 1;
+                }
+            }
+        }
+
+        Optional<ConspiratorCard> officerRecruitedCard =
+                model.getGame().getCurrentPlayer().getDossier().stream().filter(card1 -> card1.getEffect() == ConspiratorCardEffect.OFFICER_RECRUITED).findFirst();
+        if (officerRecruitedCard.isPresent()){
+            if (ViewUtil.popupConfirm("Plot Attempt", "Do you want to play \"Officer Recruited\" to gain 2 dice?")){
+                model.getGame().getCurrentPlayer().getDossier().remove(officerRecruitedCard.get());
+                model.getGame().getConspiratorDeck().discard(officerRecruitedCard.get());
+                numDice += 2;
+            }
+        }
 
         // Add die if player has special ability
         Location location = model.getGame().getBoard().getLocationWith(model.getGame().getCurrentPlayer());
@@ -1172,10 +1275,7 @@ space.
 
         // TODO Allow user to choose how many dice to roll (max == numDice)
 
-        List<DieResult> dieResults = new ArrayList<>();
-        for (int i = 0; i < numDice; ++i){
-            dieResults.add(Util.roll());
-        }
+        List<DieResult> dieResults = Util.roll(numDice);
 
         // Failure (Detection): Num Eagles >= Suspicion
         int numEagles = (int) dieResults.stream().filter(dieResult -> dieResult == DieResult.EAGLE).count();
@@ -1195,6 +1295,43 @@ space.
                     break;
             }
         }
+
+        while (numEagles > 0){
+            // Check if current player has "Hitler's Schedule Leaked" and whether they want to play it to ignore one eagle
+            Optional<ConspiratorCard> optSchedCard = model.getGame().getCurrentPlayer().getDossier().stream().filter(card1 -> card1.getEffect() == ConspiratorCardEffect.HITLERS_SCHEDULE_LEAKED).findFirst();
+            if (optSchedCard.isPresent()){
+                if (ViewUtil.popupConfirm("Plot Attempt", "Do you want to play your \"Hitler's Schedule Leaked\" card to ignore one Eagle die result?")) {
+                    numEagles -= 1;
+                    model.getGame().getCurrentPlayer().getDossier().remove(optSchedCard.get());
+                    model.getGame().getConspiratorDeck().discard(optSchedCard.get());
+                    continue;
+                }
+            }
+
+            // Check if player has any Quick Reaction (0005) cards (re-roll one die)
+            Optional<ConspiratorCard> optCard = model.getGame().getCurrentPlayer().getDossier().stream().filter(card1 -> card1.getEffect() == ConspiratorCardEffect.QUICK_REACTION).findFirst();
+            if (!optCard.isPresent())
+                break;
+            if (ViewUtil.popupConfirm("Plot Attempt", "Do you want to play your Quick Reaction card to re-roll one Eagle die result?")){
+                model.getGame().getCurrentPlayer().getDossier().remove(optCard.get());
+                model.getGame().getConspiratorDeck().discard(optCard.get());
+
+                numEagles -= 1;
+                DieResult reroll = Util.roll();
+                ViewUtil.popupNotify("You rolled a " + reroll);
+                switch (reroll){
+                    case EAGLE:
+                        numEagles += 1;
+                        break;
+                    case TARGET:
+                        numTargets += 1;
+                        break;
+                }
+            }
+            else
+                break;
+        }
+
 
         if (numEagles >= model.getGame().getCurrentPlayer().getSuspicion().getNumEaglesForPlotFailure()) {
             ViewUtil.popupNotify("Plot has been detected!  Player arrested!");
@@ -1320,5 +1457,65 @@ space.
             return false;
         }
         return true;
+    }
+
+
+    public void drawConspiratorCard(Player player){
+        int maxCards = player.getDossierMaxSize(model.getGame().getPlayers().size());
+        if (maxCards == player.getDossier().size()){
+            if (!ViewUtil.popupConfirm("Draw Card", player.getName() + " has already reached their hand size limit.  Do you still want to draw a card?")){
+                return;
+            }
+        }
+
+        if (player.getMotivation().atOrAbove(Motivation.MOTIVATED) && player.hasSpecialAbility(PlayerSpecialAbility.ACTION_DRAW_2_CARDS_KEEP_ONE_DISCARD_OTHER)){
+            handlePlayerSpecialAbility(PlayerSpecialAbility.ACTION_DRAW_2_CARDS_KEEP_ONE_DISCARD_OTHER);
+        }
+        else {
+            ConspiratorCard card = model.getGame().getConspiratorDeck().draw();
+            player.getDossier().add(card);
+            // If card is not an ACTION (ie. ONGOING), apply effect
+            if (card.getTiming() == ConspiratorCardPlayTiming.ONGOING){
+                conspiratorEffectResolver.resolveEffect(card);
+            }
+        }
+
+        checkDossierSize(player);
+    }
+
+
+    public void checkDossierSize(Player player){
+        int maxCards = player.getDossierMaxSize(model.getGame().getPlayers().size());
+        while (player.getDossier().size() > maxCards) {
+            ViewUtil.popupNotify(player.getName() + " has too many cards (hand size limit reached)");
+            ConspiratorCard cardToDiscard = (ConspiratorCard) ViewUtil.popupDropdown("Hand Limit", "You've exceeded your hand limit.  Choose card to discard.", player.getDossier().toArray(new ConspiratorCard[0]));
+            player.getDossier().remove(cardToDiscard);
+            model.getGame().getConspiratorDeck().discard(cardToDiscard);
+            if (cardToDiscard.getEffect() == ConspiratorCardEffect.CONCEALED_PISTOL){
+                Item concealedPistol = player.getItems().stream().filter(item -> item.isConcealed()).findFirst().get();
+                player.getItems().remove(concealedPistol);
+            }
+        }
+    }
+
+
+    public void checkNumItems(Player player){
+        int maxItems = player.getMaxItems(model.getGame().getPlayers().size());
+        List<Item> unconcealedItems = player.getItems().stream().filter(item -> !item.isConcealed()).collect(Collectors.toList());
+        while (unconcealedItems.size() > maxItems){
+            Item selected = (Item) ViewUtil.popupDropdown("Discard item", player.getName() + " has too many items, discard one",
+                    player.getItems().stream().filter(item -> !item.isConcealed()).collect(Collectors.toList()).toArray(new Item[0]));
+            player.getItems().remove(selected);
+            model.getGame().getItemDeck().discard(selected);
+        }
+    }
+
+    /**
+     * Check if the player has the Concealed Pistol card (acts as a Weapon Item)
+     * @param player
+     * @return
+     */
+    public boolean checkConcealedPistolCard(Player player){
+        return player.getDossier().stream().filter(card -> card.getEffect() == ConspiratorCardEffect.CONCEALED_PISTOL).findAny().isPresent();
     }
 }

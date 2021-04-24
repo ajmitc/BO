@@ -165,6 +165,9 @@ public class BoardPanel extends JPanel {
     private int mx, my;
     private int mxdown, mydown;
 
+    // Image to draw in the center of the screen, if not null
+    private BufferedImage centerScreenImage;
+
     public BoardPanel(Model model, View view){
         super();
         this.model = model;
@@ -204,6 +207,24 @@ public class BoardPanel extends JPanel {
                 super.mousePressed(e);
                 mxdown = e.getX();
                 mydown = e.getY();
+
+                if (e.getButton() == MouseEvent.BUTTON3){
+                    if (model.getGame().getCurrentEventCard() != null &&
+                            e.getX() >= CURRENT_EVENT_POINT.x && e.getX() < CURRENT_EVENT_POINT.x + EVENT_CARD_WIDTH &&
+                            e.getY() >= CURRENT_EVENT_POINT.y && e.getY() < CURRENT_EVENT_POINT.y + EVENT_CARD_WIDTH){
+                        setCenterScreenImage(ImageUtil.get(ViewUtil.getEventCardImageName(model.getGame().getCurrentEventCard()), "event-center-" + model.getGame().getCurrentEventCard().getId()));
+                        refresh();
+                    }
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                super.mousePressed(e);
+                if (e.getButton() == MouseEvent.BUTTON3){
+                    setCenterScreenImage(null);
+                    refresh();
+                }
             }
         });
     }
@@ -276,11 +297,19 @@ public class BoardPanel extends JPanel {
         if (model.getGame().getCurrentKeyEventCard() != null)
             g.drawImage(ImageUtil.get(ViewUtil.getEventCardImageName(model.getGame().getCurrentKeyEventCard()), EVENT_CARD_WIDTH, "event-board-" + model.getGame().getCurrentKeyEventCard().getId()), KEY_EVENT_POINT.x, KEY_EVENT_POINT.y, null);
 
+        if (centerScreenImage != null){
+            g.drawImage(centerScreenImage, (getWidth() - centerScreenImage.getWidth()) / 2, (getHeight() - centerScreenImage.getHeight()) / 2, null);
+        }
+
         g.setColor(Color.WHITE);
         g.drawString(mx + ", " + my, 20, 20);
     }
 
     public void refresh(){
         repaint();
+    }
+
+    public void setCenterScreenImage(BufferedImage bufferedImage){
+        this.centerScreenImage = bufferedImage;
     }
 }

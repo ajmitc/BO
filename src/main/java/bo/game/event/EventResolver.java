@@ -5,6 +5,7 @@ import bo.game.Deck;
 import bo.game.NaziMember;
 import bo.game.Phase;
 import bo.game.conspirator.ConspiratorCard;
+import bo.game.conspirator.ConspiratorCardEffect;
 import bo.game.conspirator.ConspiratorCardType;
 import bo.game.event.EventCard;
 import bo.game.item.Item;
@@ -12,6 +13,7 @@ import bo.game.item.ItemType;
 import bo.game.location.Location;
 import bo.game.location.LocationName;
 import bo.game.player.Motivation;
+import bo.game.player.Player;
 import bo.game.player.PlayerType;
 import bo.game.player.Suspicion;
 import bo.game.util.DieResult;
@@ -21,6 +23,7 @@ import bo.view.util.ViewUtil;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class EventResolver {
@@ -252,7 +255,8 @@ public class EventResolver {
 
     private void handleParadeInBerlin(){
         // Move Hitler, Goebbels, and Hess to Zeughaus
-        model.getGame().getBoard().move(NaziMember.HITLER,   LocationName.ZEUGHAUS);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER,   LocationName.ZEUGHAUS);
         model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.ZEUGHAUS);
         model.getGame().getBoard().move(NaziMember.HESS,     LocationName.ZEUGHAUS);
 
@@ -322,7 +326,8 @@ public class EventResolver {
         // Increase all conspirator's motivation by 1
         model.getGame().getPlayers().stream().forEach(player -> player.setMotivation(player.getMotivation().raise()));
         // Move hitler and deputies to starting locations
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.DEUTSCHLANDHALLE);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.DEUTSCHLANDHALLE);
         model.getGame().getBoard().move(NaziMember.GOERING, LocationName.MUNICH);
         model.getGame().getBoard().move(NaziMember.HESS, LocationName.HANNOVER);
         model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.NUREMBERG);
@@ -334,7 +339,8 @@ public class EventResolver {
         // Set Military Support to starting value
         model.getGame().resetMilitarySupport();
         // Move hitler and Goebbels to SPORTPALAST
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.SPORTPALAST);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.SPORTPALAST);
         model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.SPORTPALAST);
         // Lower suspicion of any conspirator in Berlin by 1
         model.getGame().getBoard().getBerlinLocations().stream().forEach(location -> {
@@ -355,7 +361,8 @@ public class EventResolver {
         });
 
         // Move Hitler to Chancellery
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
     }
 
     private void handleGestapoInvestigation(){
@@ -385,7 +392,8 @@ public class EventResolver {
         // Increase Military Support by 1
         model.getGame().adjMilitarySupport(1);
         // Move Hitler and Goering to Munich
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.MUNICH);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.MUNICH);
         model.getGame().getBoard().move(NaziMember.GOERING, LocationName.MUNICH);
     }
 
@@ -429,6 +437,7 @@ public class EventResolver {
         model.getGame().getPlayers().stream().filter(player -> player.getSuspicion() == Suspicion.EXTREME).forEach(player -> {
             model.getGame().arrest(player);
         });
+
         // Conspirators who are NOT arrested may discard any number of cards
         model.getGame().getPlayers().stream().filter(player -> !player.isArrested()).forEach(player -> {
             while (ViewUtil.popupConfirm("Gestapo Raid", "Does " + player.getName() + " want to discard a card (repeats)")){
@@ -438,12 +447,17 @@ public class EventResolver {
                 model.getGame().getConspiratorDeck().discard(card);
             }
         });
+
         // Raise each conspirator's suspicion by 1 for each Restricted card they hold
+        // If player has "Safe" Conspirator card, this does not apply to them
         model.getGame().getPlayers().stream().forEach(player -> {
+            if (player.getDossier().stream().filter(card -> card.getEffect() == ConspiratorCardEffect.SAFE).findAny().isPresent())
+                return;
             int numRestricted = (int) player.getDossier().stream().filter(card -> card.getType() == ConspiratorCardType.RESTRICTED).count();
             for (int i = 0; i < numRestricted; ++i)
                 player.setSuspicion(player.getSuspicion().raise());
         });
+
         // Return all dice on the Dissent track to the supply
         model.getGame().setDissentTrackDice(0);
     }
@@ -501,7 +515,8 @@ public class EventResolver {
 
     private void handleCzechInvaded(){
         model.getGame().adjMilitarySupport(1);
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.VIENNA);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.VIENNA);
 
         if (model.getGame().getBoard().getLocation(LocationName.VIENNA).getItem() != null)
             model.getGame().getBoard().getLocation(LocationName.VIENNA).getItem().setRevealed(true);
@@ -509,20 +524,23 @@ public class EventResolver {
 
     private void handleVisitFromHitlerStage3(){
         // Move Hitler to closest conspirator
-        Location destination = moveNaziMemberToClosestConspirator(NaziMember.HITLER);
+        if (!checkForDelayHitlerCard()) {
+            Location destination = moveNaziMemberToClosestConspirator(NaziMember.HITLER);
 
-        // If conspirator is alone, he may reduce both motivation and suspicion to starting levels
-        if (destination.getPlayers().size() == 1){
-            if (ViewUtil.popupConfirm("Visit From Hitler",
-                    "Do you want " + destination.getPlayers().get(0).getName() + " to reduce motivation and suspicion to starting levels?")){
-                destination.getPlayers().get(0).setSuspicion(Suspicion.MEDIUM);
-                destination.getPlayers().get(0).setMotivation(Motivation.TIMID);
+            // If conspirator is alone, he may reduce both motivation and suspicion to starting levels
+            if (destination.getPlayers().size() == 1) {
+                if (ViewUtil.popupConfirm("Visit From Hitler",
+                        "Do you want " + destination.getPlayers().get(0).getName() + " to reduce motivation and suspicion to starting levels?")) {
+                    destination.getPlayers().get(0).setSuspicion(Suspicion.MEDIUM);
+                    destination.getPlayers().get(0).setMotivation(Motivation.TIMID);
+                }
             }
         }
     }
 
     private void handleBerghofRetreatStage3(){
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.BERGHOF);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.BERGHOF);
         model.getGame().getBoard().move(NaziMember.HIMMLER, LocationName.BERGHOF);
         model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.BERGHOF);
         model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.BERGHOF);
@@ -676,7 +694,8 @@ public class EventResolver {
 
     private void handleHitlerAssumesCommand(){
         model.getGame().adjMilitarySupport(-1);
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.WOLFSSCHANZE);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.WOLFSSCHANZE);
         if (model.getGame().getBoard().getLocation(LocationName.WOLFSSCHANZE).getItem() != null)
             model.getGame().getBoard().getLocation(LocationName.WOLFSSCHANZE).getItem().setRevealed(true);
     }
@@ -726,7 +745,8 @@ public class EventResolver {
     }
 
     private void handleBerghofRetreatStage5(){
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.BERGHOF);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.BERGHOF);
         model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.BERGHOF);
         model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.BERGHOF);
 
@@ -750,7 +770,8 @@ public class EventResolver {
     }
 
     private void handleVisitToTheFront(){
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.SMOLENSK);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.SMOLENSK);
         model.getGame().getBoard().move(NaziMember.GOEBBELS, LocationName.SMOLENSK);
 
         if (model.getGame().getBoard().getLocation(LocationName.SMOLENSK).getItem() != null)
@@ -777,7 +798,8 @@ public class EventResolver {
     }
 
     private void handleVisitFromHitlerStage6(){
-        moveNaziMemberToClosestConspirator(NaziMember.HITLER);
+        if (!checkForDelayHitlerCard())
+            moveNaziMemberToClosestConspirator(NaziMember.HITLER);
         // While this is the current event, ignore 2 eagles on all plot attempts
         model.getGame().setCurrentEventEffect(CurrentEventEffect.IGNORE_2_EAGLES_ON_ALL_PLOT_EVENTS);
     }
@@ -801,7 +823,8 @@ public class EventResolver {
     }
 
     private void handleBerlinBombed(){
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
 
         // While this is the current event, add 1 eagle to all plot attempts
         model.getGame().setCurrentEventEffect(CurrentEventEffect.ADD_1_EAGLE_TO_ALL_PLOT_ATTEMPTS);
@@ -825,7 +848,8 @@ public class EventResolver {
 
     private void handleSicilyInvaded(){
         model.getGame().adjMilitarySupport(-1);
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
         model.getGame().getPlayers().stream().filter(player -> player.getType() == PlayerType.ABWEHR).forEach(player -> {
             model.getGame().getBoard().move(player, LocationName.CHANCELLERY);
         });
@@ -842,7 +866,8 @@ public class EventResolver {
 
     private void handleKurskRecaptured(){
         model.getGame().adjMilitarySupport(-1);
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.ANLAGE_SUD);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.ANLAGE_SUD);
         model.getGame().getBoard().move(NaziMember.BORMANN, LocationName.POSEN);
     }
 
@@ -859,7 +884,8 @@ public class EventResolver {
         model.getGame().getPlayers().stream().forEach(player -> {
             player.setSuspicion(player.getSuspicion().raise());
         });
-        model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
+        if (!checkForDelayHitlerCard())
+            model.getGame().getBoard().move(NaziMember.HITLER, LocationName.CHANCELLERY);
     }
 
     private void handleOperationOverlord(){
@@ -932,5 +958,28 @@ public class EventResolver {
         }
         model.getGame().getBoard().move(naziMember, destination);
         return destination;
+    }
+
+
+    /**
+     * check if any player has 'Delay Hitler' conspirator card and ask if it should be played.  If so, return true and don't move Hitler.
+     * @return true - don't move hitler (card played), false otherwise
+     */
+    private boolean checkForDelayHitlerCard(){
+        List<Player> playersWithCard = model.getGame().getPlayers().stream()
+                .filter(player -> player.getDossier().stream().anyMatch(card -> card.getEffect() == ConspiratorCardEffect.DELAY_HITLER))
+                .collect(Collectors.toList());
+        if (playersWithCard.isEmpty())
+            return false;
+        if (ViewUtil.popupConfirm("Hitler Moving", "Do you want to play 'Delay Hitler' to prevent Hitler from moving?")){
+            Player playerWithCard = playersWithCard.get(0);
+            if (playersWithCard.size() > 1)
+                playerWithCard = (Player) ViewUtil.popupDropdown("Delay Hitler", "Choose which player to use card", playersWithCard.toArray(new Player[0]));
+            ConspiratorCard card = playerWithCard.getDossier().stream().filter(card1 -> card1.getEffect() == ConspiratorCardEffect.DELAY_HITLER).findFirst().get();
+            playerWithCard.getDossier().remove(card);
+            model.getGame().getConspiratorDeck().discard(card);
+            return true;
+        }
+        return false;
     }
 }
