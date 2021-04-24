@@ -39,7 +39,7 @@ public class ViewUtil {
     }
 
     public static String getConspiratorCardImageName(ConspiratorCard card){
-        return "card-conspirator-" + card.getType().name().substring(0, 1).toUpperCase() + card.getType().name().substring(1).toLowerCase() + "-_" + card.getId() + "_" + card.getName() + ".jpg";
+        return "card-conspirator-" + card.getType().name().substring(0, 1).toUpperCase() + card.getType().name().substring(1).toLowerCase() + "-_" + card.getId() + ".jpg";
     }
 
     public static String getEventCardImageName(EventCard eventCard){
